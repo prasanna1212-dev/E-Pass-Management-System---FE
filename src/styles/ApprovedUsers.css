@@ -1,0 +1,98 @@
+.approved-user-wrapper {
+    padding: 30px;
+  }
+  
+  .approved-user-title {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+  
+  .approved-user-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    justify-content: center;
+    padding: 20px;
+  }
+  
+  .approved-user-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  
+  .approved-user-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .approved-user-icon {
+    width: 40px;
+  }
+  
+  .approved-user-request-title {
+    font-weight: 600;
+    font-size: medium;
+  }
+  
+  .approved-user-request-time {
+    font-size: 12px;
+    color: gray;
+  }
+  
+  .approved-user-badge {
+    background-color: rgb(226, 252, 226);
+    color: green;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    width: fit-content;
+    margin: 10px 0;
+  }
+  
+  .approved-user-details {
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  
+  .approved-user-empid {
+    color: dodgerblue;
+    font-weight: 600;
+  }
+  
+  .approved-user-action-text {
+    color: green;
+  }
+  
+  .approved-user-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  
+  .approved-user-reject,
+  .approved-user-approve {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  
+  .approved-user-reject {
+    background-color: #e0e0e0;
+    color: #333;
+  }
+  
+  .approved-user-approve {
+    background-color: #007bff;
+    color: white;
+  }
+  

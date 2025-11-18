@@ -1,0 +1,192 @@
+/* --- Global Layout --- */
+.landing-page-container {
+  display: flex;
+  flex-direction: column;
+  /* height: 100vh; */
+  font-family: Arial, sans-serif; /* Use a font similar to the reference */
+  background-color: #f4f5f8; /* Light background for the content area */
+}
+
+/* --- Top Bar (Header) --- */
+.landing-page-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #0056b3; /* Dark blue for the top bar */
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.landing-page-logo-container {
+  display: flex;
+  align-items: center;
+}
+
+.landing-page-logo {
+  height: 25px;
+  width: auto;
+}
+
+.landing-page-top-bar-left {
+  display: flex;
+  align-items: center;
+}
+
+.landing-page-sidebar-toggle {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: white; /* White color for the toggle button */
+  margin-right: 15px;
+}
+
+.landing-page-top-bar-right {
+  display: flex;
+  align-items: center;
+}
+
+.landing-page-user-profile {
+  display: flex;
+  align-items: center;
+  margin-right: 20px;
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  background-color: #e6f0ff; /* Light blue background */
+}
+
+.landing-page-user-icon {
+  font-size: 20px;
+  margin-right: 8px;
+  color: #0056b3; /* Dark blue for the icon */
+}
+
+.landing-page-username {
+  font-size: 14px;
+  color: #333;
+}
+
+.landing-page-logout-btn {
+  background-color: #dc3545; /* Red for logout button */
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+/* --- Main Layout --- */
+.landing-page-main {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden; /* To handle internal scrolling */
+}
+
+/* --- Sidebar --- */
+.landing-page-sidebar {
+  width: 250px; /* Default width */
+  background-color: #003366; /* Dark blue for the sidebar */
+  color: white;
+  padding-top: 20px;
+  transition: width 0.3s ease;
+  flex-shrink: 0; /* Prevents sidebar from shrinking */
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.landing-page-sidebar.collapsed {
+  width: 60px; /* Collapsed width */
+}
+
+.landing-page-sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.landing-page-sidebar-item {
+  margin-bottom: 5px;
+}
+
+.landing-page-sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  text-decoration: none;
+  color: #ccc;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.landing-page-sidebar-link:hover {
+  background-color: #004085; /* Blue highlight on hover */
+  color: white;
+}
+
+.landing-page-sidebar-icon {
+  font-size: 18px;
+  margin-right: 15px;
+}
+
+/* Hide text when collapsed */
+.landing-page-sidebar.collapsed .landing-page-sidebar-text {
+  display: none;
+}
+
+/* Center icon when collapsed */
+.landing-page-sidebar.collapsed .landing-page-sidebar-link {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.landing-page-sidebar.collapsed .landing-page-sidebar-icon {
+  margin-right: 0;
+}
+
+/* --- Content Area --- */
+.landing-page-content {
+  flex-grow: 1;
+  padding: 20px;
+  background-color: #f4f5f8; /* Light background for content */
+  transition: margin-left 0.3s ease; /* Smooth transition for content shift */
+}
+
+/* --- Active State and Sidebar Links --- */
+.landing-page-sidebar-item.active {
+  background-color: #0056b3; /* Active state color */
+  color: white;
+}
+
+.landing-page-sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  text-decoration: none;
+  color: #ffffff;
+}
+
+.landing-page-sidebar-item:hover {
+  background-color: #004085; /* Darker blue on hover */
+}
+
+.landing-page-content-body {
+  padding: 20px;
+  border-radius: 4px;
+  background-color: #ffffff; /* White background for the content */
+  height: 100vh;
+  overflow-y: scroll;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+.landing-page-sidebar-link .landing-page-sidebar-text {
+  margin-left: 10px;
+}

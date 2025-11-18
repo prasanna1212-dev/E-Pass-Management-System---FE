@@ -1,0 +1,163 @@
+.approval-request-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 16px;
+    flex: 0 1 calc(25% - 32px); /* 4 cards per row */
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+  }
+  
+  .approval-request-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: flex-start;
+    /* padding: 20px; */
+    margin: 20px;
+  }
+
+  .approval-request-header {
+    display: flex;
+    align-items: flex-start;
+  }
+  
+  .approval-request-icon-container {
+    font-size: 24px;
+    margin-right: 12px;
+  }
+
+  .approval-request-icon{
+    width: 40px;
+  }
+  
+  .approval-request-title-section {
+    flex-grow: 1;
+  }
+  
+  .approval-request-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+  }
+  
+  .approval-request-meta {
+    font-size: 12px;
+    color: #888;
+  }
+  
+  .approval-request-by {
+    font-size: 13px;
+    color: #333;
+    margin-top: 4px;
+  }
+  
+  .approval-request-priority {
+    background: #fbe8cc;
+    color: #b75d00;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 12px;
+    display: inline-block;
+    margin: 10px 0;
+  }
+  
+  .approval-request-message {
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 12px;
+  }
+  
+  .approval-request-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  
+  .approval-request-btn {
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .approval-request-btn.reject {
+    background-color: #f1f1f1;
+    color: #333;
+  }
+  
+  .approval-request-btn.approve {
+    background-color: #007bff;
+    color: #fff;
+  }
+  
+  @keyframes icon-pop {
+    0% {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  .approval-request-icon-animated {
+    margin-right: 6px;
+    font-size: 18px;
+    vertical-align: middle;
+    animation: icon-pop 0.4s ease-in-out;
+  }
+  
+  .reject-icon {
+    color: #ff4d4f;
+  }
+  
+  .approve-icon {
+    color: #ffffff;
+  }
+  
+  /* Desktop (default) — 4 cards per row */
+.approval-request-card {
+  flex: 0 1 calc(25% - 32px); /* 4 cards per row with spacing */
+}
+
+/* Medium screens (tablets) — 2 cards per row */
+@media (max-width: 1024px) {
+  .approval-request-card {
+    flex: 0 1 calc(50% - 24px);
+  }
+}
+
+/* Small screens (large phones/small tablets) — 1 card per row */
+@media (max-width: 768px) {
+  .approval-request-card {
+    flex: 0 1 100%;
+  }
+
+  .approval-request-list {
+    padding: 10px;
+    margin: 10px;
+  }
+}
+
+/* Extra small devices — improve padding & text size */
+@media (max-width: 480px) {
+  .approval-request-title {
+    font-size: 15px;
+  }
+
+  .approval-request-message,
+  .approval-request-by {
+    font-size: 13px;
+  }
+
+  .approval-request-btn {
+    font-size: 13px;
+    padding: 6px 12px;
+  }
+}

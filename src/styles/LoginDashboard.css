@@ -1,0 +1,121 @@
+.login-page-wrapper {
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  flex: 1.1;
+  /* Subtle radial gradient in the top left, fading to white */
+  /* background: radial-gradient(
+    circle at 20% 30%,
+    #cad6ff 0%,
+    #ecedfd 40%,
+    #ffffff 80%
+  ); */
+  /* background: radial-gradient(circle at 20% 30%, #c7deff 0%, #fafaff 40%, #ffffff 80%); */
+  padding-left: 60px;
+}
+
+
+.login-topright-logo {
+  position: absolute;
+  top: 32px;
+  right: 48px;
+  z-index: 10;
+}
+
+.login-logo-img {
+  width: 100px;
+  display: block;
+}
+
+.login-dashboard-container{
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  z-index: 1000;
+  margin-right: 100px;
+}
+
+.login-box {
+  padding: 30px 40px;
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  text-align: center;
+}
+
+.login-header {
+  margin-bottom: 24px;
+}
+
+.login-brand {
+  font-family: 'Orbitron', sans-serif;
+  color: white;
+  font-size: 28px;
+  margin: 0;
+}
+
+.close-icon {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.signup-container {
+  position: relative;
+  background-color: rgba(255,255,255,0.1);
+  padding: 30px;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+}
+
+.login-logo {
+  position: absolute;
+  top: 32px;
+  right: 48px;
+  z-index: 10;
+}
+
+.login-logo img {
+  width: 100px;
+  display: block;
+}
+
+
+.login-bg-left {
+  flex: 1.1;
+  min-width: 340px;
+  position: relative;
+  /* Subtle radial gradient in the top left, fading to white */
+
+  
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-left: 60px;
+}
+
+.login-left-image {
+  width: 700px;           /* Adjust as needed */
+  max-width: 80%;
+  display: block;
+  margin: 0 auto 24px auto; /* Center and add bottom spacing */
+  filter: drop-shadow(0 8px 32px rgba(60, 60, 120, 0.10));
+}

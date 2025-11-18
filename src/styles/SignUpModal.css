@@ -1,0 +1,220 @@
+.signup-page {
+    display: flex;
+    align-items: flex-start; 
+    justify-content: flex-end;
+    height: 100vh;
+    background-image: url("/cloud-server-bg.png");
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: auto; 
+    padding: 20px; /* Add padding for scroll buffer */
+  }
+  
+  .signup-modal-container {
+    width: 100%;
+    max-width: 400px;
+    max-height: calc(90vh - 60px); /* Prevent overflow */
+    overflow-y: auto; /* Enable scroll inside modal */
+    padding: 0px;
+    border-radius: 16px;
+    backdrop-filter: blur(15px);
+    background-color: rgba(255, 255, 255, 0.685);
+    /* box-shadow: rgba(31, 109, 145, 0.4) 5px 5px, rgba(19, 100, 138, 0.3) 10px 10px, rgba(24, 114, 187, 0.2) 15px 15px, rgba(46, 137, 240, 0.1) 20px 20px, rgba(222, 227, 233, 0.05) 25px 25px; */
+    box-shadow: rgba(229, 238, 247, 0.48) 6px 2px 16px 0px, rgba(255, 255, 255, 0.8) -6px -2px 16px 0px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    position: relative;
+    margin: auto 0; /* Vertically align if space allows */
+  
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+  
+  .signup-modal-container::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .signup-form
+  {
+     
+    padding: 20px;
+  }
+  
+  .signup-modal-title {
+    font-size: 26px;
+    font-weight: bold;
+    text-align: center;
+    color: #2d368e;
+  }
+  
+  .close-icon {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 20px;
+    color: #2d368e !important;
+    cursor: pointer;
+  }
+  
+  .custom-select .ant-select-selector,
+  .sign-up-input {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: gray !important;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .custom-select .ant-select-selection-item {
+    color: gray !important;
+  }
+  
+  .custom-dropdown {
+    background-color: #fff !important;
+    border: 1px solid #ccc !important;
+  }
+  
+  .custom-dropdown .ant-select-item {
+    color: rgb(70, 67, 67) !important;
+  }
+  
+  .custom-dropdown .ant-select-item:hover {
+    background-color: #f0f0f0 !important;
+    color: gray !important;
+  }
+  
+  .sign-up-input .ant-input::placeholder {
+    color: #d9d9d9 !important;
+  }
+  
+  .signup-button-register {
+    background: linear-gradient(90deg, #0c68ca 60%, #1282fa 100%);
+    border: none;
+    border-radius:10px;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    padding: 12px 0;
+    box-shadow: 0 6px 18px rgba(33, 98, 248, 0.418);
+    transition: 
+    background 0.2s,
+    box-shadow 0.2s,
+    transform 0.25s cubic-bezier(0.4, 0.2, 0.2, 1);
+  }
+  
+  .signup-button-register:hover {
+    transform: perspective(200px) rotateX(8deg) scale(1.03);
+  box-shadow: 0 12px 32px rgba(45, 108, 255, 0.22);
+  }
+  
+  .loader-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+  
+  .username-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding-left: 0px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .domain-display {
+    color: #2d6cff;
+    font-weight: 500;
+    padding-right: 10px;
+  }
+  
+  .Klean-signup-button-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+  }
+  
+  .input-underline {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid #aaadc9 !important;
+    border-radius: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    color: gray !important;
+    font-weight: 500;
+    box-shadow: none !important;
+    transition: border-color 0.3s ease;
+  }
+  
+  .input-underline:hover,
+  .input-underline:focus-within,
+  .input-underline:focus {
+    border-bottom-color: #aaadc9 !important;
+  }
+  
+  .input-underline .ant-select-selector {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid #aaadc9!important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: #003fb4 !important;
+  }
+  
+  
+  /* Responsive tweaks */
+  @media (max-width: 575.98px) {
+    .signup-page {
+      justify-content: center;
+      padding: 10px;
+    }
+  
+    .signup-modal-container {
+      width: 100%;
+      padding: 20px;
+    }
+  
+    .signup-modal-title {
+      font-size: 22px;
+    }
+  
+    .signup-button-register {
+      font-size: 14px;
+    }
+  }
+  
+  @media (min-width: 576px) and (max-width: 1199.98px) {
+    .signup-modal-container {
+      width: 90%;
+      padding: 25px;
+    }
+  
+    .signup-modal-title {
+      font-size: 24px;
+    }
+  }
+  
+  @media (min-width: 1200px) {
+    .signup-modal-container {
+      width: 480px;
+    }
+  
+    .signup-modal-title {
+      font-size: 28px;
+    }
+  
+    .signup-button-register {
+      font-size: 17px;
+      padding: 14px 0;
+    }
+  }
+  

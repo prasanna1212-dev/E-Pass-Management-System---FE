@@ -1,0 +1,246 @@
+/* Container */
+.outpass-request-container {
+  padding: 20px;
+  font-family: 'Inter', sans-serif;
+  background-color: #f9fafc;
+  /* height: 105vh; */
+}
+
+/* Title */
+.outpass-form-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #1f2937;
+}
+
+/* Filter Panel */
+.outpass-request-filter-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+/* Search Input Wrapper */
+.outpass-request-search-wrapper {
+  display: flex;
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 8px 12px;
+  flex: 1;
+}
+
+.outpass-request-search-wrapper input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+}
+
+.outpass-request-search-wrapper .icon {
+  color: #6b7280;
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+/* Date Picker Wrapper */
+.outpass-request-date-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.outpass-request-date-wrapper .icon {
+  color: #6b7280;
+  font-size: 18px;
+}
+
+/* Buttons */
+.outpass-request-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s ease;
+}
+
+.outpass-request-btn:hover {
+  background: #0056b3;
+}
+
+.outpass-request-btn.reset {
+  background: #6c757d;
+}
+
+.outpass-request-btn.reset:hover {
+  background: #5a6268;
+}
+
+/* Table */
+.ant-table {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.ant-table th {
+  font-weight: 600;
+  color: #374151;
+}
+
+.ant-table td {
+  color: #4b5563;
+}
+
+/* Modal */
+.ant-modal-content {
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.ant-modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.ant-modal-body p {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #374151;
+}
+
+.ant-btn-link {
+  color: #007bff;
+}
+
+
+/* .outpass-request-container {
+  padding: 10px;
+  font-family: 'Inter', sans-serif;
+  background: #fff;
+}
+
+.outpass-form-title{
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.outpass-request-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.outpass-request-header-right {
+  display: flex;
+  gap: 10px;
+}
+
+.outpass-request-btn {
+  background: #007bff;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.outpass-request-search {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.outpass-request-filters input {
+  margin-left: 10px;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.outpass-request-search:focus {
+  outline: none;
+}
+
+.outpass-request-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.outpass-request-table th,
+.outpass-request-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.outpass-request-table th {
+  cursor: pointer;
+}
+
+.outpass-request-view-btn {
+  background: #ffffff;
+  color: dodgerblue;
+  border: 1px solid dodgerblue;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.outpass-request-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.outpass-request-pagination button {
+  margin: 0 5px;
+  padding: 6px 10px;
+}
+
+.outpass-request-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.outpass-request-modal {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  width: 400px;
+}
+
+.outpass-request-close-btn {
+  background: #ffffff;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+} */

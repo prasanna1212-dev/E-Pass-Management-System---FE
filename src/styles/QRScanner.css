@@ -1,0 +1,194 @@
+.qrscanner-container {
+  max-width: 550px;
+  margin: 60px auto;
+  padding: 25px;
+  text-align: center;
+  background-color: #ffffff;
+}
+
+.qrscanner-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.qrscanner-logo {
+  width: 120px;
+  margin-bottom: 10px;
+}
+
+.qrscanner-title {
+  color: #002060;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.qrscanner-subtext {
+  color: #777;
+  font-size: 15px;
+}
+
+.qrscanner-input-group {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.qrscanner-input {
+  width: 70%;
+}
+
+.qrscanner-btn {
+  background-color: #002060;
+  border: none;
+}
+
+.qrscanner-btn:hover {
+  background-color: #003399;
+}
+
+.qrscanner-loading {
+  margin-top: 30px;
+}
+
+.qrscanner-card {
+  margin-top: 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  text-align: left;
+  padding: 15px 20px;
+}
+
+.qrscanner-card-title {
+  text-align: center;
+  color: #002060;
+  margin-bottom: 15px;
+}
+
+.qrscanner-status {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.qrscanner-status-valid {
+  color: green;
+  font-size: 18px;
+}
+
+.qrscanner-status-expired {
+  color: red;
+  font-size: 18px;
+}
+
+.qrscanner-status-rejected {
+  color: #b30000;
+  font-size: 18px;
+}
+
+.qrscanner-status-pending {
+  color: #1677ff;
+  font-size: 18px;
+}
+
+.qrscanner-refresh-btn {
+  border: 1px solid #1890ff;
+  color: #1890ff;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.qrscanner-refresh-btn:hover {
+  background: #1890ff;
+  color: white;
+}
+
+.qrscanner-time {
+  font-size: 14px;
+  color: #1890ff;
+  font-weight: 500;
+  background: #f6f6f6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+
+/* QRScanner.css
+
+.qr-scanner-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 20px;
+    background-color: #f0f2f5; 
+    min-height: 100vh;
+}
+
+.qr-logo-placeholder {
+    width: 150px;
+    height: auto;
+    margin-bottom: 20px;
+}
+
+.scanner-title {
+    color: #001529;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.scanner-card {
+    width: 100%;
+    max-width: 450px; 
+    text-align: center;
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+
+.scanner-card .ant-card-body > div {
+    
+    overflow: hidden;
+    border-radius: 8px;
+    margin-top: 10px;
+    border: 3px solid #d9d9d9;
+}
+
+
+.validation-card {
+    margin-top: 25px;
+    width: 100%;
+    max-width: 450px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease-in-out;
+}
+
+
+.validation-card[style*="green"] {
+    background-color: #f6ffed;
+}
+
+
+.validation-card[style*="red"] {
+    background-color: #fff1f0;
+}
+
+.validation-card .ant-card-head-title {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.validation-card p {
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+
+@media (max-width: 600px) {
+    .scanner-card, .validation-card {
+        max-width: 95%;
+    }
+} */
