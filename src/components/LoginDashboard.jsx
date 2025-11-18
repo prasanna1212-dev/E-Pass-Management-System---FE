@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import UserLoginModal from './userloginmodal';
+import UserLoginModal from './UserLoginModal';
 import SignUpModal from './SignUpModal';
 // import nexgenlogo from "../assets/nexgenlogo.png";
 import kgisl from "../assets/kgisl_logo_bg.png";
