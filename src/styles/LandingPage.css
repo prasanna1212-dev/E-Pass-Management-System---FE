@@ -2,9 +2,8 @@
 .landing-page-container {
   display: flex;
   flex-direction: column;
-  /* height: 100vh; */
-  font-family: Arial, sans-serif; /* Use a font similar to the reference */
-  background-color: #f4f5f8; /* Light background for the content area */
+  font-family: Arial, sans-serif;
+  background-color: #f4f5f8;
 }
 
 /* --- Top Bar (Header) --- */
@@ -13,7 +12,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 20px;
-  background-color: #0056b3; /* Dark blue for the top bar */
+  background-color: #0056b3;
   color: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: sticky;
@@ -41,7 +40,7 @@
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: white; /* White color for the toggle button */
+  color: white;
   margin-right: 15px;
 }
 
@@ -54,25 +53,34 @@
   display: flex;
   align-items: center;
   margin-right: 20px;
-  padding: 5px 10px;
-  border: 1px solid #ddd;
+  padding: 5px 12px;
   border-radius: 20px;
-  background-color: #e6f0ff; /* Light blue background */
+  background-color: #e6f0ff;
 }
 
 .landing-page-user-icon {
   font-size: 20px;
   margin-right: 8px;
-  color: #0056b3; /* Dark blue for the icon */
+  color: #0056b3;
 }
 
 .landing-page-username {
   font-size: 14px;
-  color: #333;
+  color: #222;
+}
+
+.landing-page-role-badge {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #0056b3;
+  color: white;
 }
 
 .landing-page-logout-btn {
-  background-color: #dc3545; /* Red for logout button */
+  background-color: #dc3545;
   color: white;
   border: none;
   padding: 8px 12px;
@@ -87,24 +95,25 @@
 .landing-page-main {
   display: flex;
   flex-grow: 1;
-  overflow: hidden; /* To handle internal scrolling */
+  overflow: hidden;
 }
 
 /* --- Sidebar --- */
 .landing-page-sidebar {
-  width: 250px; /* Default width */
-  background-color: #003366; /* Dark blue for the sidebar */
+  width: 250px;
+  background-color: #003366;
   color: white;
   padding-top: 20px;
   transition: width 0.3s ease;
-  flex-shrink: 0; /* Prevents sidebar from shrinking */
+  flex-shrink: 0;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
 }
 
 .landing-page-sidebar.collapsed {
-  width: 60px; /* Collapsed width */
+  width: 60px;
 }
 
+/* Sidebar List */
 .landing-page-sidebar-nav ul {
   list-style: none;
   padding: 0;
@@ -112,21 +121,24 @@
 }
 
 .landing-page-sidebar-item {
-  margin-bottom: 5px;
+  width: 100%;
 }
 
+/* --- FIXED Button Styling (no grey BG) --- */
 .landing-page-sidebar-link {
   display: flex;
   align-items: center;
+  width: 100%;
   padding: 12px 15px;
+  color: #ffffff;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  text-align: left;
   text-decoration: none;
-  color: #ccc;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
 
-.landing-page-sidebar-link:hover {
-  background-color: #004085; /* Blue highlight on hover */
-  color: white;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .landing-page-sidebar-icon {
@@ -134,12 +146,29 @@
   margin-right: 15px;
 }
 
-/* Hide text when collapsed */
+.landing-page-sidebar-text {
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
+/* Hover Effect */
+.landing-page-sidebar-item:hover .landing-page-sidebar-link {
+  background-color: #004085;
+  color: #ffffff;
+}
+
+/* Active Effect */
+.landing-page-sidebar-item.active .landing-page-sidebar-link {
+  background-color: #0056b3; /* final screenshot blue */
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Collapsed State */
 .landing-page-sidebar.collapsed .landing-page-sidebar-text {
   display: none;
 }
 
-/* Center icon when collapsed */
 .landing-page-sidebar.collapsed .landing-page-sidebar-link {
   justify-content: center;
   padding: 12px 0;
@@ -153,40 +182,19 @@
 .landing-page-content {
   flex-grow: 1;
   padding: 20px;
-  background-color: #f4f5f8; /* Light background for content */
-  transition: margin-left 0.3s ease; /* Smooth transition for content shift */
-}
-
-/* --- Active State and Sidebar Links --- */
-.landing-page-sidebar-item.active {
-  background-color: #0056b3; /* Active state color */
-  color: white;
-}
-
-.landing-page-sidebar-link {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  text-decoration: none;
-  color: #ffffff;
-}
-
-.landing-page-sidebar-item:hover {
-  background-color: #004085; /* Darker blue on hover */
+  background-color: #f4f5f8;
+  transition: margin-left 0.3s ease;
 }
 
 .landing-page-content-body {
   padding: 20px;
   border-radius: 4px;
-  background-color: #ffffff; /* White background for the content */
+  background-color: #ffffff;
   height: 100vh;
   overflow-y: scroll;
 }
 
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
-}
-
-.landing-page-sidebar-link .landing-page-sidebar-text {
-  margin-left: 10px;
 }
