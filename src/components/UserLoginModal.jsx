@@ -31,13 +31,21 @@ function UserLoginModal({ onSignUpClick, redirectPath, onLoginSuccess }) {
       const { role } = response.data.user;
       const { organizationalUnitPath, domain_join_upn, email } = user;
 
+      // 🔹 store auth info
       localStorage.setItem("domain_join_upn", domain_join_upn);
       localStorage.setItem("email", email);
       localStorage.setItem("accessToken", response.data.accessToken);
       localStorage.setItem("refreshToken", response.data.refreshToken);
 
+      // ✅ store role so LandingPage can use it
+      if (role) {
+        localStorage.setItem("role", role.toLowerCase());
+      } else {
+        localStorage.removeItem("role");
+      }
+
       let redirectPath = "/user-dashboard";
-      if (role === "admin") redirectPath = "/admin-dashboard";
+      if (role === "superadmin") redirectPath = "/admin-dashboard";
 
       setTimeout(() => {
         navigate(redirectPath, {
@@ -85,8 +93,6 @@ function UserLoginModal({ onSignUpClick, redirectPath, onLoginSuccess }) {
             {passwordVisible ? <FaEyeSlash /> : <FaEye />}
           </span>
         </div>
-
-        {/* <div className="recover-password">Recover Password?</div> */}
 
         {error && (
           <Alert
