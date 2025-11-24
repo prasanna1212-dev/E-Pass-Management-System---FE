@@ -116,6 +116,13 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+.qrscanner-status-completed {
+  color: #52c41a !important;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* QRScanner.css
 
