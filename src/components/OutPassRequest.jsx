@@ -11,7 +11,9 @@ import {
     Select, 
     Pagination,
     notification, 
-    Image
+    Image,
+    Form,
+    Typography
 } from "antd"; 
 import { 
     SearchOutlined, 
@@ -19,13 +21,19 @@ import {
     UndoOutlined, 
     EyeOutlined,
     CheckCircleOutlined,
-    CloseCircleOutlined
+    CloseCircleOutlined,
+    ExclamationCircleOutlined,
+    UserOutlined,
+    FileTextOutlined,
+    EditOutlined
 } from "@ant-design/icons";
 import "../styles/OutPassRequest.css";
 import toast from "react-hot-toast";
 
 const { RangePicker } = DatePicker;
 const { Option } = Select; 
+const { TextArea } = Input;
+const { Text } = Typography;
 
 const POLLING_INTERVAL = 30000; 
 
@@ -39,41 +47,64 @@ function OutPassRequest() {
     const [selectedItem, setSelectedItem] = useState(null);
     const [loading, setLoading] = useState(false); 
     
-    // 💡 NEW STATE for Status Filter
+    // Filter states
     const [statusFilter, setStatusFilter] = useState("All"); 
+    const [permissionFilter, setPermissionFilter] = useState("All");
     
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10); 
 
-    // DEDICATED FETCH FUNCTION - Updated to use all current filters
+    // Rejection Modal State
+    const [rejectionModalVisible, setRejectionModalVisible] = useState(false);
+    const [rejectionTarget, setRejectionTarget] = useState(null);
+    const [rejectionForm] = Form.useForm();
+    const [rejectionLoading, setRejectionLoading] = useState(false);
+
+    // Edit Approval Modal State (from component 2)
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [editRecord, setEditRecord] = useState(null);
+    const [editedCheckOut, setEditedCheckOut] = useState(null);
+    const [editedCheckIn, setEditedCheckIn] = useState(null);
+    const [editedRemarks, setEditedRemarks] = useState("");
+    const [editForm] = Form.useForm();
+
+    // Unified fetch function that handles both API endpoints
     const fetchOutpassData = useCallback(async () => {
         setLoading(true); 
         try {
-            const res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
+            // Try the unified endpoint first (from component 1)
+            let res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
+            
+            // Fallback to old endpoint if needed (from component 2)
+            if (!res.ok) {
+                res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
+            }
+            
             if (!res.ok) throw new Error("Failed to fetch data");
             
             const result = await res.json();
-            // 🔹 Sort: newest updated/created at the top
+            // Sort: newest updated/created at the top
             const sorted = [...result].sort((a, b) => {
               const aTime = a.updated_at || a.created_at;
               const bTime = b.updated_at || b.created_at;
-              return dayjs(bTime).valueOf() - dayjs(aTime).valueOf(); // desc
+              return dayjs(bTime).valueOf() - dayjs(aTime).valueOf();
             });
-            setData(result);
+            setData(sorted);
             
-            // Recalculate filtered data using current filter states
+            // Apply all current filters
             let temp = sorted;
             const searchTerm = search ? search.toLowerCase() : "";
                 
             // 1. Text Search Filter
             temp = temp.filter(item => 
                 item.name.toLowerCase().includes(searchTerm) ||
-                item.hostel.toLowerCase().includes(searchTerm) ||
+                (item.hostel && item.hostel.toLowerCase().includes(searchTerm)) ||
                 item.inst_name.toLowerCase().includes(searchTerm) || 
-                item.course.toLowerCase().includes(searchTerm) ||
+                (item.course && item.course.toLowerCase().includes(searchTerm)) ||
                 item.purpose.toLowerCase().includes(searchTerm) ||
-                item.hostel_id.toLowerCase().includes(searchTerm)
+                (item.display_id && item.display_id.toLowerCase().includes(searchTerm)) ||
+                (item.hostel_id && item.hostel_id.toLowerCase().includes(searchTerm))
             );
 
             // 2. Date Range Filter
@@ -85,14 +116,19 @@ function OutPassRequest() {
                 );
             }
             
-            // 💡 3. Status Filter (NEW LOGIC)
+            // 3. Status Filter
             if (statusFilter && statusFilter !== "All") {
                 temp = temp.filter(item => item.status === statusFilter);
+            }
+
+            // 4. Permission Filter (if available)
+            if (permissionFilter && permissionFilter !== "All" && temp.some(item => item.permission)) {
+                temp = temp.filter(item => item.permission === permissionFilter);
             }
             
             setFilteredData(temp);
 
-            // Handle pagination reset on fetch
+            // Handle pagination reset
             const totalPages = Math.ceil(temp.length / pageSize);
             if (currentPage > totalPages && totalPages > 0) {
                 setCurrentPage(1);
@@ -104,26 +140,21 @@ function OutPassRequest() {
             console.error("Data fetching error:", err);
             notification.error({
                 message: 'Data Fetch Error',
-                description: 'Failed to load outpass data from the server.',
+                description: 'Failed to load outpass/leave data from the server.',
             });
         } finally {
             setLoading(false);
         }
-    }, [search, dateRange, statusFilter, currentPage, pageSize]); // 💡 Added statusFilter to dependencies
+    }, [search, dateRange, statusFilter, permissionFilter, currentPage, pageSize]);
 
-    // useEffect for initial fetch and Polling
     useEffect(() => {
         fetchOutpassData();
-
-        const intervalId = setInterval(() => {
-            fetchOutpassData();
-        }, POLLING_INTERVAL); 
-
+        const intervalId = setInterval(fetchOutpassData, POLLING_INTERVAL); 
         return () => clearInterval(intervalId);
     }, [fetchOutpassData]);
 
-    // Apply filters logic (used by filter handlers) - Updated signature and logic
-    const applyFilters = useCallback((currentData, currentSearch, currentRange, currentStatus) => {
+    // Apply filters with all filter types
+    const applyFilters = useCallback((currentData, currentSearch, currentRange, currentStatus, currentPermission) => {
         let temp = [...currentData].sort((a, b) => {
           const aTime = a.updated_at || a.created_at;
           const bTime = b.updated_at || b.created_at;
@@ -133,11 +164,12 @@ function OutPassRequest() {
             
         temp = temp.filter((item) => (
             item.name.toLowerCase().includes(searchTerm) ||
-            item.hostel.toLowerCase().includes(searchTerm) ||
+            (item.hostel && item.hostel.toLowerCase().includes(searchTerm)) ||
             item.inst_name.toLowerCase().includes(searchTerm) || 
-            item.course.toLowerCase().includes(searchTerm) ||
+            (item.course && item.course.toLowerCase().includes(searchTerm)) ||
             item.purpose.toLowerCase().includes(searchTerm) ||
-            item.hostel_id.toLowerCase().includes(searchTerm)
+            (item.display_id && item.display_id.toLowerCase().includes(searchTerm)) ||
+            (item.hostel_id && item.hostel_id.toLowerCase().includes(searchTerm))
         ));
 
         if (currentRange && currentRange.length === 2) {
@@ -149,9 +181,12 @@ function OutPassRequest() {
             );
         }
         
-        // 💡 Status Filter Logic
         if (currentStatus && currentStatus !== "All") {
             temp = temp.filter(item => item.status === currentStatus);
+        }
+
+        if (currentPermission && currentPermission !== "All" && temp.some(item => item.permission)) {
+            temp = temp.filter(item => item.permission === currentPermission);
         }
 
         setFilteredData(temp);
@@ -160,18 +195,22 @@ function OutPassRequest() {
 
     const handleSearch = (value) => {
         setSearch(value);
-        applyFilters(data, value, dateRange, statusFilter); // Pass statusFilter
+        applyFilters(data, value, dateRange, statusFilter, permissionFilter);
     };
 
     const handleDateChange = (dates) => {
         setDateRange(dates);
-        applyFilters(data, search, dates, statusFilter); // Pass statusFilter
+        applyFilters(data, search, dates, statusFilter, permissionFilter);
     };
 
-    // 💡 NEW Handler for Status Change
     const handleStatusChange = (value) => {
         setStatusFilter(value);
-        applyFilters(data, search, dateRange, value); // Pass new status value
+        applyFilters(data, search, dateRange, value, permissionFilter);
+    };
+
+    const handlePermissionChange = (value) => {
+        setPermissionFilter(value);
+        applyFilters(data, search, dateRange, statusFilter, value);
     };
 
     const handlePaginationChange = (page, size) => {
@@ -181,7 +220,6 @@ function OutPassRequest() {
 
     const formatTime = (time) => {
         if (!time) return "N/A";
-        // Convert "HH:MM:SS" string to a Date object for time formatting
         const [hour, minute] = time.split(":");
         const date = dayjs().set('hour', hour).set('minute', minute).toDate();
         
@@ -192,12 +230,11 @@ function OutPassRequest() {
         });
     };
 
-    // --- DIRECT RENEWAL APPROVAL LOGIC (UPDATED) ---
+    // --- RENEWAL APPROVAL (Outpass only) ---
     const handleDirectRenewApprove = async (record) => {
-        // Use the requested new values from the record
         const id = record.id;
-        const formattedDate = record.new_date_to; // Assuming the date is already in YYYY-MM-DD format
-        const formattedTime = record.new_time_in; // Assuming the time is already in HH:MM:SS format
+        const formattedDate = record.new_date_to;
+        const formattedTime = record.new_time_in;
 
         if (!formattedDate || !formattedTime) {
             notification.error({
@@ -207,20 +244,31 @@ function OutPassRequest() {
             return;
         }
         
-        // Show a loading/progress toast
         const loadingToastId = toast.loading(`Renewing outpass for ${record.name}...`);
 
         try {
-            // API endpoint to approve the renewal and update dates/status
-            const response = await fetch(`${API_BASE_URL}/outpass-route/outpass/approve-renewal/${id}`, {
+            // Try new API structure first, then fallback
+            let response = await fetch(`${API_BASE_URL}/outpass-route/outpass/approve-renewal/${id}`, {
                 method: "POST",
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     date_to: formattedDate,
                     time_in: formattedTime,
-                    reason: record.renewal_reason || 'Renewal Approved by Staff/Warden.' // Send back the original reason or a generic one
+                    reason: record.renewal_reason || 'Renewal Approved by Staff/Warden.'
                 })
             });
+
+            if (!response.ok) {
+                response = await fetch(`${API_BASE_URL}/outpass-route/outpass/approve-renewal/${id}`, {
+                    method: "POST",
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date_to: formattedDate,
+                        time_in: formattedTime,
+                        reason: record.renewal_reason || 'Renewal Approved by Staff/Warden.'
+                    })
+                });
+            }
             
             const result = await response.json();
 
@@ -249,7 +297,7 @@ function OutPassRequest() {
         }
     };
     
-    // --- Handle Renewal Rejection (UPDATED) ---
+    // --- RENEWAL REJECTION (Outpass only) ---
     const handleRejectRenewal = async (id) => {
         const confirmReject = window.confirm("Are you sure you want to reject this renewal request?");
         if (!confirmReject) return;
@@ -257,10 +305,15 @@ function OutPassRequest() {
         const loadingToastId = toast.loading("Rejecting renewal...");
 
         try {
-            // Assuming a separate endpoint for renewal rejection
-            const response = await fetch(`${API_BASE_URL}/outpass-route/outpass/reject-renewal/${id}`, {
+            let response = await fetch(`${API_BASE_URL}/outpass-route/outpass/reject-renewal/${id}`, {
                 method: "POST",
             });
+
+            if (!response.ok) {
+                response = await fetch(`${API_BASE_URL}/outpass-route/outpass/reject-renewal/${id}`, {
+                    method: "POST",
+                });
+            }
 
             const result = await response.json();
 
@@ -289,20 +342,39 @@ function OutPassRequest() {
         }
     };
 
-    // Accept/Reject handlers (Initial Submission) - Minor Update for consistency
-    const handleAccept = async (id) => {
-        const loadingToastId = toast.loading("Accepting initial request...");
+    // Direct Accept handler (works for both outpass and leave)
+    const handleAccept = async (record) => {
+        const isLeaveRequest = record.is_leave_request || record.permission === 'leave';
         
-          try {
-            const response = await fetch(`${API_BASE_URL}/outpass-route/outpass/accept/${id}`, {
-                method: "POST",
-            });
+        let endpoint;
+        if (isLeaveRequest) {
+            endpoint = `${API_BASE_URL}/outpass-route/leave/accept/${record.id}`;
+        } else {
+            endpoint = `${API_BASE_URL}/outpass-route/outpass/accept/${record.id}`;
+        }
+        
+        const loadingToastId = toast.loading(`Accepting ${isLeaveRequest ? 'leave' : 'outpass'} request...`);
+        
+        try {
+            let response = await fetch(endpoint, { method: "POST" });
+            
+            // Fallback to old API structure if needed
+            if (!response.ok) {
+                endpoint = isLeaveRequest 
+                    ? `${API_BASE_URL}/outpass-route/leave/accept/${record.id}`
+                    : `${API_BASE_URL}/outpass-route/outpass/accept/${record.id}`;
+                response = await fetch(endpoint, { method: "POST" });
+            }
+            
             const result = await response.json();
+            
             if (response.ok) {
                 toast.dismiss(loadingToastId);
                 notification.success({
-                    message: 'Outpass Accepted',
-                    description: "Outpass accepted. QR sent via email.",
+                    message: `${isLeaveRequest ? 'Leave' : 'Outpass'} Accepted`,
+                    description: isLeaveRequest 
+                        ? "Leave request accepted successfully."
+                        : "Outpass accepted. QR sent via email.",
                 });
                 await fetchOutpassData();
                 setCurrentPage(1); 
@@ -310,7 +382,7 @@ function OutPassRequest() {
                 toast.dismiss(loadingToastId);
                 notification.error({
                     message: 'Acceptance Failed',
-                    description: result.message || "Failed to accept outpass.",
+                    description: result.message || "Failed to accept request.",
                 });
             }
         } catch (error) {
@@ -318,103 +390,224 @@ function OutPassRequest() {
             console.error(error);
             notification.error({
                 message: 'Network Error',
-                description: 'Network or server error while accepting outpass.',
+                description: 'Network or server error while accepting request.',
             });
         }
     };
 
-    // const handleReject = async (id) => {
-    //     // ... (Original handleReject logic) ...
-    //     const confirmReject = window.confirm("Are you sure you want to reject this initial request?");
-    //     if (!confirmReject) return;
-        
-    //     const loadingToastId = toast.loading("Rejecting initial request...");
+    // Accept with edits (from component 2) - for outpass only
+    const handleApproveWithEdits = async () => {
+  try {
+    const values = await editForm.validateFields();
 
-    //     try {
-    //         const response = await fetch(`${API_BASE_URL}/outpass-route/outpass/reject/${id}`, {
-    //             method: "POST",
-    //         });
+    const checkout = values.checkout;
+    const checkin = values.checkin;
+    const remarks = values.remarks || "";
 
-    //         const result = await response.json();
+    const isLeaveRequest =
+      editRecord.is_leave_request || editRecord.permission === "leave";
+    const requestType = isLeaveRequest ? "leave" : "outpass";
 
-    //         if (response.ok) {
-    //             toast.dismiss(loadingToastId);
-    //             notification.info({
-    //                 message: 'Outpass Rejected',
-    //                 description: "Outpass successfully rejected.",
-    //             });
-    //             await fetchOutpassData();
-    //             setCurrentPage(1);  
-    //         } else {
-    //             toast.dismiss(loadingToastId);
-    //             notification.error({
-    //                 message: 'Rejection Failed',
-    //                 description: result.message || "Failed to reject outpass.",
-    //             });
-    //         }
-    //     } catch (error) {
-    //         toast.dismiss(loadingToastId);
-    //         console.error("Error during rejection process:", error);
-    //         notification.error({
-    //             message: 'Network Error',
-    //             description: 'Network or server error while rejecting outpass.',
-    //         });
-    //     }
-    // };
+    const loadingToastId = toast.loading(
+      `Approving ${requestType} with updated time...`
+    );
 
-    const handleReject = async (id) => {
-        // Step 1: confirm
-        const confirmReject = window.confirm("Are you sure you want to reject this initial request?");
-        if (!confirmReject) return;
+    try {
+      let endpoint = isLeaveRequest
+        ? `${API_BASE_URL}/api/outpass-route/leave/accept/${editRecord.id}`
+        : `${API_BASE_URL}/api/outpass-route/outpass/accept/${editRecord.id}`;
 
-        // Step 2: ask for reason
-        const reason = window.prompt(
-            "Please enter the reason for rejection (this will be sent in the email to the student):",
-            ""
-        );
+      let response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updated_date_from: checkout.format("YYYY-MM-DD"),
+          updated_time_out: checkout.format("HH:mm:ss"),
+          updated_date_to: checkin.format("YYYY-MM-DD"),
+          updated_time_in: checkin.format("HH:mm:ss"),
+          remarks,
+        }),
+      });
 
-        // optional: if user cancels the prompt, do nothing
-        if (reason === null) {
-            toast.dismiss();
-            return;
-        }
+      // fallback to non /api routes
+      if (!response.ok) {
+        endpoint = isLeaveRequest
+          ? `${API_BASE_URL}/outpass-route/leave/accept/${editRecord.id}`
+          : `${API_BASE_URL}/outpass-route/outpass/accept/${editRecord.id}`;
 
-        const loadingToastId = toast.loading("Rejecting initial request...");
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            updated_date_from: checkout.format("YYYY-MM-DD"),
+            updated_time_out: checkout.format("HH:mm:ss"),
+            updated_date_to: checkin.format("YYYY-MM-DD"),
+            updated_time_in: checkin.format("HH:mm:ss"),
+            remarks,
+          }),
+        });
+      }
 
+      const resData = await response.json();
+      toast.dismiss(loadingToastId);
+
+      if (response.ok) {
+        notification.success({
+          message: `${isLeaveRequest ? "Leave" : "Outpass"} Approved`,
+          description: isLeaveRequest
+            ? "Leave request approved with updated timing."
+            : "QR emailed to student with updated timing.",
+        });
+        setEditModalOpen(false);
+        fetchOutpassData();
+      } else {
+        notification.error({
+          message: "Approval Failed",
+          description: resData.message || "Unable to approve request.",
+        });
+      }
+    } catch (err) {
+      toast.dismiss(loadingToastId);
+      notification.error({
+        message: "Network Error",
+        description: "Unable to approve request.",
+      });
+    }
+  } catch (validationError) {
+    // antd form already shows errors under fields, no need for toast
+    return;
+  }
+};
+
+    // Open Rejection Modal
+    const handleRejectClick = (record) => {
+        setRejectionTarget(record);
+        setRejectionModalVisible(true);
+        rejectionForm.resetFields();
+    };
+
+    // Handle rejection (works for both outpass and leave)
+    const handleRejectionSubmit = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/outpass-route/outpass/reject/${id}`, {
+            const values = await rejectionForm.validateFields();
+            setRejectionLoading(true);
+
+            const isLeaveRequest = rejectionTarget.is_leave_request || rejectionTarget.permission === 'leave';
+            let endpoint;
+            
+            if (isLeaveRequest) {
+                endpoint = `${API_BASE_URL}/outpass-route/leave/reject/${rejectionTarget.id}`;
+            } else {
+                endpoint = `${API_BASE_URL}/outpass-route/outpass/reject/${rejectionTarget.id}`;
+            }
+
+            let response = await fetch(endpoint, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ reason }), // ⬅️ send reason to backend
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    reason: values.reason.trim() || "No specific reason provided."
+                }),
             });
+
+            // Fallback to old API
+            if (!response.ok) {
+                endpoint = isLeaveRequest
+                    ? `${API_BASE_URL}/outpass-route/leave/reject/${rejectionTarget.id}`
+                    : `${API_BASE_URL}/outpass-route/outpass/reject/${rejectionTarget.id}`;
+                
+                response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        reason: values.reason.trim() || "No specific reason provided."
+                    }),
+                });
+            }
 
             const result = await response.json();
 
             if (response.ok) {
-                toast.dismiss(loadingToastId);
-                notification.info({
-                    message: "Outpass Rejected",
-                    description: "Outpass successfully rejected and email sent to the student.",
+                notification.success({
+                    message: `${isLeaveRequest ? 'Leave' : 'Outpass'} Rejected Successfully`,
+                    description: `Rejection processed for ${rejectionTarget.name}.`,
                 });
+                
+                setRejectionModalVisible(false);
+                setRejectionTarget(null);
                 await fetchOutpassData();
                 setCurrentPage(1);
             } else {
-                toast.dismiss(loadingToastId);
                 notification.error({
                     message: "Rejection Failed",
-                    description: result.message || "Failed to reject outpass.",
+                    description: result.message || "Failed to reject request.",
                 });
             }
         } catch (error) {
-            toast.dismiss(loadingToastId);
             console.error("Error during rejection process:", error);
             notification.error({
                 message: "Network Error",
-                description: "Network or server error while rejecting outpass.",
+                description: "Network or server error while rejecting request.",
             });
+        } finally {
+            setRejectionLoading(false);
         }
+    };
+
+    const handleRejectionCancel = () => {
+        setRejectionModalVisible(false);
+        setRejectionTarget(null);
+        rejectionForm.resetFields();
+    };
+
+    // Helper functions
+    const buildDateTime = (dateStr, timeStr) => {
+        if (!dateStr || !timeStr) return null;
+
+        // normalize to local date (handles ISO / timezone)
+        const dateOnly = dayjs(dateStr).format("YYYY-MM-DD");
+
+        // support HH:mm or HH:mm:ss
+        const timeFormat = timeStr.length === 5 ? "HH:mm" : "HH:mm:ss";
+
+        return dayjs(`${dateOnly} ${timeStr}`, `YYYY-MM-DD ${timeFormat}`);
+    };
+
+
+    const computeDuration = (record) => {
+        if (!record) return "N/A";
+
+        const startDate = dayjs(record.date_from).format("YYYY-MM-DD");
+        const endDate = dayjs(record.date_to).format("YYYY-MM-DD");
+
+        const startTime = String(record.time_out || "00:00");
+        const endTime = String(record.time_in || "00:00");
+
+        const start = dayjs(`${startDate} ${startTime}`);
+        const end = dayjs(`${endDate} ${endTime}`);
+
+        if (!start.isValid() || !end.isValid() || end.isBefore(start)) {
+            return record.duration || "N/A";
+        }
+
+        const diffMs = end.diff(start);
+        const totalMinutes = Math.floor(diffMs / 60000);
+
+        const days = Math.floor(totalMinutes / (60 * 24));
+        const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+        const minutes = totalMinutes % 60;
+
+        return `${days}D / ${hours}H / ${minutes}M`;
+    };
+
+    const getStudentImageSrc = (item) => {
+        if (!item || !item.student_image) return null;
+
+        if (typeof item.student_image === "string" && item.student_image.startsWith("data:")) {
+            return item.student_image;
+        }
+
+        const mime = item.image_mimetype || "image/jpeg";
+        return `data:${mime};base64,${item.student_image}`;
     };
 
     const totalEntries = filteredData.length;
@@ -422,7 +615,6 @@ function OutPassRequest() {
     const endIndex = Math.min(currentPage * pageSize, totalEntries);
     const paginatedData = filteredData.slice(startIndex, endIndex);
 
-    // Helper for the "Showing X-Y of Z entries" text (omitted for brevity, assume unchanged)
     const PaginationInfo = () => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -444,14 +636,71 @@ function OutPassRequest() {
             </span>
         </div>
     );
-    
 
+    // Check if data has permission field to show permission filter
+    const hasPermissionData = data.some(item => item.permission);
+    
+    // Unified columns with conditional rendering
     const columns = [
-        { title: "Name", dataIndex: "name", key: "name" },
-        { title: "Hostel", dataIndex: "hostel", key: "hostel" },
-        { title: "Institution", dataIndex: "inst_name", key: "inst_name", render: (text) => <span style={{ color: "dodgerblue", fontWeight: 600 }}>{text}</span> },
-        { title: "Course", dataIndex: "course", key: "course" },
-        { title: "Purpose", dataIndex: "purpose", key: "purpose" },
+        { 
+            title: "Name", 
+            dataIndex: "name", 
+            key: "name",
+            render: (text, record) => (
+                <div>
+                    <div>{text}</div>
+                    {record.permission && (
+                        <Tag 
+                            color={record.permission === 'leave' ? 'blue' : 'green'} 
+                            size="small"
+                            icon={record.permission === 'leave' ? <FileTextOutlined /> : <UserOutlined />}
+                        >
+                            {record.permission === 'leave' ? 'Leave' : 'Outpass'}
+                        </Tag>
+                    )}
+                </div>
+            )
+        },
+        { 
+            title: "ID", 
+            key: "display_id",
+            render: (text, record) => (
+                <span style={{ fontWeight: 600 }}>
+                    {record.display_id || record.hostel_id} 
+                    {record.permission && (
+                        <div style={{ fontSize: '11px', color: '#666' }}>
+                            {record.permission === 'leave' ? 'Roll No' : 'Hostel ID'}
+                        </div>
+                    )}
+                </span>
+            )
+        },
+        { 
+            title: "Hostel/Course", 
+            key: "hostel_course",
+            render: (_, record) => (
+                <div>
+                    <div style={{ fontWeight: 600, color: "dodgerblue" }}>
+                        {record.hostel || record.display_course || record.course}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>
+                        {record.inst_name}
+                    </div>
+                </div>
+            )
+        },
+        { 
+            title: "Purpose/Destination", 
+            key: "purpose_destination",
+            render: (_, record) => (
+                <div>
+                    <div>{record.purpose}</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>
+                        {record.destination || record.address}
+                    </div>
+                </div>
+            )
+        },
         {
             title: "From",
             dataIndex: "date_from",
@@ -482,115 +731,113 @@ function OutPassRequest() {
                     color = "error";
                 } else if (status === "Renewal Pending") {
                     color = "warning";
-                } else if (status === "Renewed") { // The staff-approved status
+                } else if (status === "Renewed") {
                     color = "processing";
+                } else if (status === "Completed") {
+                    color = "purple";
                 } else {
                     color = "default";
                 }
                 return <Tag color={color}>{text}</Tag>;
             },
         },
-        {
-            title: "Action",
-            render: (_, record) => (
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    {/* View Button */}
-                    <Button icon={<EyeOutlined />} type="link" onClick={() => setSelectedItem(record)}>
-                        View
+       {
+    title: "Action",
+    render: (_, record) => (
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            {/* View Button */}
+            <Button icon={<EyeOutlined />} type="link" onClick={() => setSelectedItem(record)}>
+                View
+            </Button>
+
+            {/* Conditional Rendering based on Status and Type */}
+            {record.status === "Renewal Pending" && (record.permission === "permission" || !record.permission) ? (
+                <>
+                    <Button 
+                        type="primary" 
+                        icon={<CheckCircleOutlined />}
+                        onClick={() => handleDirectRenewApprove(record)} 
+                        style={{ backgroundColor: '#4b3d82', borderColor: '#4b3d82' }}
+                    >
+                        Renew
                     </Button>
+                    <Button danger icon={<CloseCircleOutlined />} onClick={() => handleRejectRenewal(record.id)}>
+                        Reject
+                    </Button>
+                </>
+            ) : record.status === "Pending" ? (
+                <>
+                    {/* 🚀 UPDATED: Both Leave and Outpass open modal for time review */}
+                    <Button
+                        type="primary"
+                        icon={<CheckCircleOutlined />}
+                        onClick={() => {
+                            setEditRecord(record);
 
-                    {/* Conditional Rendering based on Status */}
-                    {record.status === "Renewal Pending" ? (
-                        <>
-                            {/* Staff action: Approve Renewal (DIRECT CALL) */}
-                            <Button 
-                                type="primary" 
-                                icon={<CheckCircleOutlined />}
-                                onClick={() => handleDirectRenewApprove(record)} 
-                                style={{ backgroundColor: '#4b3d82', borderColor: '#4b3d82' }}
-                            >
-                                Renew
-                            </Button>
-                            {/* Staff action: Reject Renewal */}
-                            <Button danger icon={<CloseCircleOutlined />} onClick={() => handleRejectRenewal(record.id)}>
-                                Reject
-                            </Button>
-                        </>
-                    ) : record.status === "Pending" ? (
-                        <>
-                            {/* Staff action: Initial Accept/Reject */}
-                            <Button type="primary" onClick={() => handleAccept(record.id)}>
-                                Accept
-                            </Button>
-                            <Button danger onClick={() => handleReject(record.id)}>
-                                Reject
-                            </Button>
-                        </>
-                    ) : (
-                        <Tag 
-                            color={record.status === "Accepted" ? "success" : record.status === "Rejected" ? "error" : record.status === "Renewed" ? "processing" : "default"}
-                            style={{ fontWeight: "600" }}
+                            const originalOut = buildDateTime(record.date_from, record.time_out);
+                            const originalIn = buildDateTime(record.date_to, record.time_in);
+                            const now = dayjs();
+
+                            // clamp checkout to now if original is in the past
+                            const safeOut =
+                            originalOut && originalOut.isAfter(now)
+                                ? originalOut
+                                : now.add(5, "minute");
+
+                            // clamp check-in to be after checkout
+                            let safeIn =
+                            originalIn && originalIn.isAfter(safeOut)
+                                ? originalIn
+                                : safeOut.add(1, "hour");
+
+                            setEditedCheckOut(safeOut);
+                            setEditedCheckIn(safeIn);
+                            setEditedRemarks("");
+
+                            // initialise form fields
+                            editForm.setFieldsValue({
+                            checkout: safeOut,
+                            checkin: safeIn,
+                            remarks: "",
+                            });
+
+                            setEditModalOpen(true);
+                        }}
                         >
-                            {record.status.toUpperCase()}
-                        </Tag>
-                    )}
-                </div>
-            ),
-        }
+                        Accept
+                        </Button>
+                    
+                    <Button danger onClick={() => handleRejectClick(record)}>
+                        Reject
+                    </Button>
+                </>
+            ) : (
+                <Tag 
+                    color={
+                        record.status === "Accepted" ? "success" : 
+                        record.status === "Rejected" ? "error" : 
+                        record.status === "Renewed" ? "processing" : 
+                        record.status === "Completed" ? "purple" : "default"
+                    }
+                    style={{ fontWeight: "600" }}
+                >
+                    {record.status.toUpperCase()}
+                </Tag>
+            )}
+        </div>
+    ),
+}
+
     ];
-
-    const computeDuration = (record) => {
-    if (!record) return "N/A";
-
-    // Normalize dates to YYYY-MM-DD (Day.js can handle Date or string)
-    const startDate = dayjs(record.date_from).format("YYYY-MM-DD");
-    const endDate = dayjs(record.date_to).format("YYYY-MM-DD");
-
-    // Raw times from DB ("HH:mm" or "HH:mm:ss")
-    const startTime = String(record.time_out || "00:00");
-    const endTime = String(record.time_in || "00:00");
-
-    const start = dayjs(`${startDate} ${startTime}`);
-    const end = dayjs(`${endDate} ${endTime}`);
-
-    if (!start.isValid() || !end.isValid() || end.isBefore(start)) {
-        // Fallback to whatever is in DB if parsing goes weird
-        return record.duration || "N/A";
-    }
-
-    const diffMs = end.diff(start);
-    const totalMinutes = Math.floor(diffMs / 60000);
-
-    const days = Math.floor(totalMinutes / (60 * 24));
-    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-    const minutes = totalMinutes % 60;
-
-    return `${days}D / ${hours}H / ${minutes}M`;
-};
-
-  const getStudentImageSrc = (item) => {
-      if (!item || !item.student_image) return null;
-
-      // If backend already gives a full data URL:
-      if (typeof item.student_image === "string" && item.student_image.startsWith("data:")) {
-        return item.student_image;
-      }
-
-      const mime = item.image_mimetype || "image/jpeg";
-
-      // student_image here is pure base64 (no "0x", no Buffer, just a string)
-      return `data:${mime};base64,${item.student_image}`;
-    };
-    console.log("image src:", getStudentImageSrc(selectedItem));
 
     return (
         <div className="outpass-request-container">
-            <h2 className="outpass-form-title">Submission&nbsp; Request</h2>
+            <h2 className="outpass-form-title">Outpass &amp; Leave Requests</h2>
 
-            {/* Filter Panel (Updated) */}
+            {/* Filter Panel */}
             <div className="outpass-request-filter-panel">
                 <Input
-                    placeholder="Search name, hostel, purpose..."
+                    placeholder="Search name, ID, purpose..."
                     prefix={<SearchOutlined />}
                     value={search}
                     onChange={(e) => handleSearch(e.target.value)}
@@ -599,39 +846,54 @@ function OutPassRequest() {
                 />
                 <RangePicker onChange={handleDateChange} style={{ marginLeft: 10 }} allowClear/>
                 
-                {/* 💡 NEW STATUS SELECT FILTER */}
+                {/* Status Filter */}
                 <Select
                     value={statusFilter}
-                    style={{ width: 180, marginLeft: 10 }}
+                    style={{ width: 150, marginLeft: 10 }}
                     onChange={handleStatusChange}
-                    placeholder="Filter by Status"
-                    allowClear
+                    placeholder="Status"
                 >
-                    <Option value="All">All Statuses</Option>
+                    <Option value="All">All Status</Option>
                     <Option value="Pending">Pending</Option>
                     <Option value="Accepted">Accepted</Option>
                     <Option value="Rejected">Rejected</Option>
                     <Option value="Renewal Pending">Renewal Pending</Option>
                     <Option value="Renewed">Renewed</Option>
+                    <Option value="Completed">Completed</Option>
                 </Select>
+
+                {/* Permission Filter - only show if data has permission field */}
+                {hasPermissionData && (
+                    <Select
+                        value={permissionFilter}
+                        style={{ width: 150, marginLeft: 10 }}
+                        onChange={handlePermissionChange}
+                        placeholder="Type"
+                    >
+                        <Option value="All">All Types</Option>
+                        <Option value="permission">Outpass</Option>
+                        <Option value="leave">Leave</Option>
+                    </Select>
+                )}
 
                 <Button
                     icon={<UndoOutlined />}
                     onClick={() => {
                         setSearch("");
                         setDateRange([]);
-                        setStatusFilter("All"); // 💡 Reset Status Filter
-                        applyFilters(data, "", [], "All"); // Apply resets to filter data
+                        setStatusFilter("All");
+                        setPermissionFilter("All");
+                        applyFilters(data, "", [], "All", "All");
                     }}
                     style={{ marginLeft: 10, color:"red" }}
                 >
-                    Reset Filters
+                    Reset
                 </Button>
                 <Button
                     icon={<ReloadOutlined />}
                     onClick={() => {
                         fetchOutpassData(); 
-                        toast.success("Updated Data Synced!");
+                        toast.success("Data Refreshed!");
                     }}
                     style={{ marginLeft: 10, color:"dodgerblue" }}
                 >
@@ -649,7 +911,7 @@ function OutPassRequest() {
                 pagination={false} 
             />
 
-            {/* CUSTOM PAGINATION CONTAINER */}
+            {/* Pagination */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '10px 0' }}>
                 <PaginationInfo /> 
                 <Pagination
@@ -661,10 +923,184 @@ function OutPassRequest() {
                 />
             </div>
             
-            {/* VIEW DETAILS MODAL (Unchanged - uses selectedItem state) */}
+            {/* Rejection Modal */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />
+                        <span>Reject {rejectionTarget?.permission === 'leave' ? 'Leave' : 'Outpass'} Request</span>
+                    </div>
+                }
+                open={rejectionModalVisible}
+                onOk={handleRejectionSubmit}
+                onCancel={handleRejectionCancel}
+                confirmLoading={rejectionLoading}
+                width={600}
+                okText="Confirm Rejection"
+                cancelText="Cancel"
+                okButtonProps={{
+                    danger: true,
+                    icon: <CloseCircleOutlined />
+                }}
+                maskClosable={false}
+            >
+                {rejectionTarget && (
+                    <div>
+                        <div style={{ 
+                            backgroundColor: '#fff2f0', 
+                            border: '1px solid #ffccc7', 
+                            borderRadius: '6px', 
+                            padding: '12px 16px', 
+                            marginBottom: '20px' 
+                        }}>
+                            <Text strong style={{ color: '#cf1322' }}>
+                                You are about to reject the {rejectionTarget.permission === 'leave' ? 'leave' : 'outpass'} request for:
+                            </Text>
+                            <div style={{ marginTop: '8px' }}>
+                                <Text strong style={{ color: '#1890ff' }}>
+                                    {rejectionTarget.name}
+                                </Text>
+                                <Text style={{ marginLeft: '8px', color: '#666' }}>
+                                    ({rejectionTarget.permission === 'leave' ? 'Roll No' : 'Hostel ID'}: {rejectionTarget.display_id || rejectionTarget.hostel_id})
+                                </Text>
+                            </div>
+                            <div style={{ marginTop: '4px', color: '#666' }}>
+                                <Text style={{ fontSize: '13px' }}>
+                                    {rejectionTarget.display_course || rejectionTarget.course} • {rejectionTarget.purpose}
+                                </Text>
+                            </div>
+                        </div>
+
+                        <Form form={rejectionForm} layout="vertical">
+                            <Form.Item
+                                label="Reason for Rejection"
+                                name="reason"
+                                rules={[
+                                    { required: true, message: 'Please provide a reason for rejection' },
+                                    { min: 10, message: 'Reason should be at least 10 characters long' },
+                                    { max: 500, message: 'Reason cannot exceed 500 characters' }
+                                ]}
+                            >
+                                <TextArea
+                                    rows={4}
+                                    placeholder="Please provide a clear reason for rejecting this request. This reason will be sent to the student."
+                                    showCount
+                                    maxLength={500}
+                                />
+                            </Form.Item>
+                        </Form>
+
+                        <div style={{ 
+                            fontSize: '13px', 
+                            color: '#666', 
+                            marginTop: '16px',
+                            padding: '8px 12px',
+                            backgroundColor: '#f6f6f6',
+                            borderRadius: '4px',
+                            borderLeft: '3px solid #1890ff'
+                        }}>
+                            <Text strong>Note:</Text> The rejection reason will be processed and may be sent to the student. 
+                            Please ensure your reason is professional and clear.
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Edit Approval Modal */}
+           <Modal
+  title={`Approve ${editRecord?.permission === "leave" ? "Leave" : "Outpass"} (Review & Edit)`}
+  open={editModalOpen}
+  onCancel={() => setEditModalOpen(false)}
+  onOk={handleApproveWithEdits}
+  width={600}
+>
+  <Form form={editForm} layout="vertical">
+    <Form.Item
+      label="Check-Out (Date & Time)"
+      name="checkout"
+      rules={[
+        { required: true, message: "Please select check-out date & time" },
+        () => ({
+          validator(_, value) {
+            if (!value) return Promise.resolve();
+            const now = dayjs();
+            if (value.isBefore(now, "minute")) {
+              return Promise.reject(
+                new Error("Check-out cannot be in the past")
+              );
+            }
+            return Promise.resolve();
+          },
+        }),
+      ]}
+    >
+      <DatePicker
+        showTime={{ format: "hh:mm A" }}
+        format="YYYY-MM-DD hh:mm A"
+        style={{ width: "100%" }}
+        disabledDate={(current) =>
+          current && current < dayjs().startOf("day")
+        }
+      />
+    </Form.Item>
+
+    <Form.Item
+      label="Check-In (Date & Time)"
+      name="checkin"
+      rules={[
+        { required: true, message: "Please select check-in date & time" },
+        ({ getFieldValue }) => ({
+          validator(_, value) {
+            const checkout = getFieldValue("checkout");
+            if (!value || !checkout) return Promise.resolve();
+
+            const now = dayjs();
+            if (value.isBefore(now, "minute")) {
+              return Promise.reject(
+                new Error("Check-in cannot be in the past")
+              );
+            }
+            if (!value.isAfter(checkout)) {
+              return Promise.reject(
+                new Error("Check-in must be later than check-out")
+              );
+            }
+            return Promise.resolve();
+          },
+        }),
+      ]}
+    >
+      <DatePicker
+        showTime={{ format: "hh:mm A" }}
+        format="YYYY-MM-DD hh:mm A"
+        style={{ width: "100%" }}
+        disabledDate={(current) => {
+          if (!current) return false;
+          const todayBlocked = current < dayjs().startOf("day");
+          const checkout = editForm.getFieldValue("checkout");
+          if (!checkout) return todayBlocked;
+          return (
+            todayBlocked || current.isBefore(checkout.startOf("day"))
+          );
+        }}
+      />
+    </Form.Item>
+
+    <Form.Item label="Remarks (Why edited?)" name="remarks">
+      <TextArea
+        rows={3}
+        placeholder="Enter remarks..."
+        onChange={(e) => setEditedRemarks(e.target.value)}
+      />
+    </Form.Item>
+  </Form>
+</Modal>
+
+            
+            {/* View Details Modal */}
             <Modal
               visible={!!selectedItem}
-              title={`Outpass Request Details`}
+              title={`${selectedItem?.permission === 'leave' ? 'Leave' : 'Outpass'} Request Details`}
               centered
               onCancel={() => setSelectedItem(null)}
               footer={null}
@@ -672,7 +1108,6 @@ function OutPassRequest() {
             >
               {selectedItem && (
                 <div style={{ padding: '0 10px' }}>
-                  {/* 1. Header and Status */}
                   <div
                     style={{
                       display: "flex",
@@ -681,11 +1116,10 @@ function OutPassRequest() {
                       marginBottom: 12,
                     }}
                   >
-                    {/* Left: Name + Status */}
                     <div>
                       <h3 style={{ margin: 0 }}>
                         <span style={{ color: "dodgerblue" }}>
-                          {selectedItem.name} ({selectedItem.hostel_id})
+                          {selectedItem.name} ({selectedItem.display_id || selectedItem.hostel_id})
                         </span>
 
                         <Tag
@@ -696,6 +1130,8 @@ function OutPassRequest() {
                               ? "error"
                               : selectedItem.status === "Renewed"
                               ? "processing"
+                              : selectedItem.status === "Completed"
+                              ? "purple"
                               : selectedItem.status === "Renewal Pending"
                               ? "warning"
                               : "default"
@@ -704,10 +1140,18 @@ function OutPassRequest() {
                         >
                           {selectedItem.status.toUpperCase()}
                         </Tag>
+
+                        {selectedItem.permission && (
+                            <Tag 
+                              color={selectedItem.permission === 'leave' ? 'blue' : 'green'} 
+                              style={{ marginLeft: 5 }}
+                            >
+                              {selectedItem.permission === 'leave' ? 'LEAVE' : 'OUTPASS'}
+                            </Tag>
+                        )}
                       </h3>
                     </div>
 
-                    {/* Right: Student Photo with zoom-on-click */}
                     {getStudentImageSrc(selectedItem) && (
                       <Image
                         src={getStudentImageSrc(selectedItem)}
@@ -715,7 +1159,6 @@ function OutPassRequest() {
                         width={82}
                         height={82}
                         style={{
-                          // borderRadius: "50%",
                           objectFit: "cover",
                           border: "2px solid #e0e7ff",
                           boxShadow: "0 4px 10px rgba(15, 23, 42, 0.15)",
@@ -739,19 +1182,24 @@ function OutPassRequest() {
                     )}
                   </div>
 
-                  {/* 2. Main Details - Descriptions Component */}
+                  {/* Main Details */}
                   <Descriptions bordered column={2} size="small" style={{ marginBottom: 15 }}>
-                    <Descriptions.Item label="Hostel/Room">{selectedItem.hostel} / {selectedItem.room_no}</Descriptions.Item>
+                    <Descriptions.Item label={selectedItem.permission === 'leave' ? 'Roll No/Room' : 'Hostel/Room'}>
+                      {selectedItem.permission === 'leave' 
+                        ? `${selectedItem.display_id || selectedItem.hostel_id} / ${selectedItem.room_no || 'N/A'}` 
+                        : `${selectedItem.hostel || 'N/A'} / ${selectedItem.room_no || 'N/A'}`
+                      }
+                    </Descriptions.Item>
                     <Descriptions.Item label="Purpose">{selectedItem.purpose}</Descriptions.Item>
                     <Descriptions.Item label="Institution">{selectedItem.inst_name}</Descriptions.Item>
-                    <Descriptions.Item label="Course/Year">{selectedItem.course} / {selectedItem.year}</Descriptions.Item>
-                    <Descriptions.Item label="Mobile">{selectedItem.mobile}</Descriptions.Item>
-                    <Descriptions.Item label="Email">{selectedItem.mail_id}</Descriptions.Item>
-                    <Descriptions.Item label="Destination" span={2}>{selectedItem.address}</Descriptions.Item>
+                    <Descriptions.Item label="Course/Program">{selectedItem.display_course || selectedItem.course}</Descriptions.Item>
+                    <Descriptions.Item label="Contact">{selectedItem.display_contact || selectedItem.mobile}</Descriptions.Item>
+                    <Descriptions.Item label="Year">{selectedItem.year || 'N/A'}</Descriptions.Item>
+                    <Descriptions.Item label="Destination" span={2}>{selectedItem.destination || selectedItem.address}</Descriptions.Item>
                   </Descriptions>
                   
-                  {/* 3. Duration and Timing */}
-                  <Descriptions title="Outpass Timing" bordered column={2} size="small" style={{ marginBottom: 15 }}>
+                  {/* Duration and Timing */}
+                  <Descriptions title={`${selectedItem.permission === 'leave' ? 'Leave' : 'Outpass'} Timing`} bordered column={2} size="small" style={{ marginBottom: 15 }}>
                     <Descriptions.Item label="Duration" span={2}>
                       <span style={{ fontWeight: 600, color: 'dodgerblue' }}>{computeDuration(selectedItem)}</span>
                     </Descriptions.Item>
@@ -765,8 +1213,28 @@ function OutPassRequest() {
                     </Descriptions.Item>
                   </Descriptions>
 
-                  {/* 4. Renewal Request Details (New) */}
-                  {selectedItem.status === "Renewal Pending" && (
+                  {/* Exit/Entry Times if available */}
+                  {(selectedItem.exit_time || selectedItem.entry_time) && (
+                    <Descriptions title="Campus Activity" bordered column={2} size="small" style={{ marginBottom: 15 }}>
+                      {selectedItem.exit_time && (
+                        <Descriptions.Item label="Campus Exit">
+                          <span style={{ color: 'orange', fontWeight: 600 }}>
+                            {new Date(selectedItem.exit_time).toLocaleString()}
+                          </span>
+                        </Descriptions.Item>
+                      )}
+                      {selectedItem.entry_time && (
+                        <Descriptions.Item label="Campus Entry">
+                          <span style={{ color: 'green', fontWeight: 600 }}>
+                            {new Date(selectedItem.entry_time).toLocaleString()}
+                          </span>
+                        </Descriptions.Item>
+                      )}
+                    </Descriptions>
+                  )}
+
+                  {/* Renewal Request Details (Outpass only) */}
+                  {selectedItem.status === "Renewal Pending" && (!selectedItem.permission || selectedItem.permission === "permission") && (
                     <Descriptions title="Renewal Request" bordered column={1} size="small" style={{ marginBottom: 15, borderColor: '#ffc53d' }}>
                       <Descriptions.Item label="Requested Reason">
                         <span style={{ fontWeight: 600 }}>{selectedItem.renewal_reason || 'No specific reason provided.'}</span>
@@ -778,9 +1246,20 @@ function OutPassRequest() {
                       </Descriptions.Item>
                     </Descriptions>
                   )}
+
+                  {/* Rejection Details */}
+                  {selectedItem.status === "Rejected" && selectedItem.rejection_reason && (
+                    <Descriptions title="Rejection Details" bordered column={1} size="small" style={{ marginBottom: 15, borderColor: '#ff4d4f' }}>
+                      <Descriptions.Item label="Rejection Reason">
+                        <span style={{ color: '#cf1322', fontWeight: 600 }}>
+                          {selectedItem.rejection_reason}
+                        </span>
+                      </Descriptions.Item>
+                    </Descriptions>
+                  )}
                   
-                  {/* 5. QR Code and Validity (Conditional) */}
-                  {selectedItem.status === "Accepted" && selectedItem.qr_code && (
+                  {/* QR Code (Outpass only) */}
+                  {selectedItem.status === "Accepted" && selectedItem.qr_code && (!selectedItem.permission || selectedItem.permission === "permission") && (
                     <div style={{ textAlign: 'center', marginTop: 20 }}>
                       <h4 style={{ color: 'green', margin: '0 0 10px' }}>Entry/Exit QR Pass</h4>
                       <img 
@@ -792,7 +1271,7 @@ function OutPassRequest() {
                     </div>
                   )}
 
-                  {/* 6. Metadata */}
+                  {/* Metadata */}
                   <p style={{ fontSize: 14, color: '#666', marginTop: 15, borderTop: '1px solid #eee', paddingTop: 10, textAlign: 'center' }}>
                     Requested:&nbsp; 
                     <span style={{ fontWeight: "600" }}>
