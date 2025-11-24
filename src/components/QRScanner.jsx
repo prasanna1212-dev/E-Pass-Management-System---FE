@@ -8,6 +8,9 @@ import {
   ClockCircleOutlined,
   ReloadOutlined,
   UserOutlined,
+  ExclamationCircleOutlined,
+  LogoutOutlined,
+  LoginOutlined,
 } from "@ant-design/icons";
 import kglogo from "../assets/kgisledu.png";
 import "../styles/QRScanner.css";
@@ -21,7 +24,12 @@ const QRScanner = () => {
   const [outpassData, setOutpassData] = useState(null);
   const [currentTime, setCurrentTime] = useState("");
   const [studentImage, setStudentImage] = useState(null);
-  const [imageModalVisible, setImageModalVisible] = useState(false);
+  
+  // 🚀 NEW: Entry/Exit Modal States
+  const [exitModalVisible, setExitModalVisible] = useState(false);
+  const [entryModalVisible, setEntryModalVisible] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
 
   const inputRef = useRef(null);
 
@@ -83,6 +91,44 @@ const QRScanner = () => {
     return normalizedId;
   };
 
+  // 🚀 Enhanced status validation with late entry logic
+  const determineOutpassStatus = (originalStatus, validUntil) => {
+    if (!validUntil || originalStatus === "Valid") {
+      return originalStatus;
+    }
+
+    const now = new Date();
+    const validDate = new Date(validUntil);
+    
+    // Check if the valid date is today
+    const isToday = (
+      now.getFullYear() === validDate.getFullYear() &&
+      now.getMonth() === validDate.getMonth() &&
+      now.getDate() === validDate.getDate()
+    );
+
+    // If it's today and originally expired
+    if (isToday && originalStatus === "Expired") {
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      // Convert current time to minutes for easier comparison
+      const currentTimeInMinutes = currentHour * 60 + currentMinute;
+      const ninePM = 21 * 60; // 9 PM in minutes (21:00)
+      
+      // If current time is before 9 PM, allow as valid
+      if (currentTimeInMinutes < ninePM) {
+        return "Valid";
+      } else {
+        // After 9 PM, mark as late entry
+        return "Late Entry";
+      }
+    }
+
+    // Return original status for all other cases
+    return originalStatus;
+  };
+
   const handleFetchOutpass = async (idValue) => {
     const idToCheck = normalizeHostelId(idValue || hostelId);
     if (!idToCheck) {
@@ -99,23 +145,39 @@ const QRScanner = () => {
         `${API_BASE_URL}/outpass-route/outpass/validate/${idToCheck}`
       );
 
-      setOutpassData(res.data);
+      // Apply enhanced status logic
+      const enhancedStatus = determineOutpassStatus(res.data.status, res.data.valid_until);
+      
+      const enhancedData = {
+        ...res.data,
+        status: enhancedStatus
+      };
+
+      setOutpassData(enhancedData);
 
       // Fetch student image if available
       if (res.data.details?.student_image) {
         fetchStudentImage(idToCheck);
       }
 
-      const status = res.data.status;
-      if (status === "Valid") toast.success("Outpass is Valid");
-      else if (status === "Expired") toast.error("Outpass has Expired");
-      else toast(res.data.status);
-
-      // Clear input and refocus for next scan
-      setHostelId("");
-      if (inputRef.current) {
-        inputRef.current.focus();
+      // 🚀 IMPROVED: Handle Entry/Exit Logic - only show modals on fresh scans
+      if (enhancedStatus === "Valid" || enhancedStatus === "Late Entry") {
+        handleEntryExitLogic(enhancedData, idToCheck);
+      } else if (enhancedStatus === "Expired") {
+        toast.error("Outpass has Expired");
+      } else if (enhancedStatus === "Completed") {
+        toast.success("Outpass Already Completed");
+      } else {
+        toast(enhancedStatus);
       }
+
+      // Clear input and refocus for next scan (always clear after processing)
+      setTimeout(() => {
+        setHostelId("");
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100); // Small delay to ensure modal states are updated
     } catch (err) {
       console.error(err);
       toast.error("Invalid or expired Hostel ID");
@@ -129,11 +191,143 @@ const QRScanner = () => {
     }
   };
 
+  // 🚀 UPDATED: Handle Entry/Exit Logic with support for both tables
+  const handleEntryExitLogic = (data, scannedIdentifier) => {
+    const scanCount = data.details?.scan_count || 0;
+    const requestType = data.request_type; // 'outpass' or 'leave'
+    
+    // 🚀 NEW: Determine the correct identifier based on request type
+    let identifier;
+    if (requestType === 'outpass') {
+      identifier = data.details.hostel_id || data.details.identifier;
+    } else if (requestType === 'leave') {
+      identifier = data.details.roll_no || data.details.identifier;
+    } else {
+      // Fallback to scanned identifier
+      identifier = scannedIdentifier;
+    }
+    
+    if (scanCount === 0) {
+      // First scan - Student wants to exit campus
+      setPendingAction({
+        type: 'exit',
+        data: data,
+        identifier: identifier,
+        requestType: requestType,
+        outpassId: data.details.id
+      });
+      setExitModalVisible(true);
+      toast.success("First scan detected - Confirm campus exit");
+    } else if (scanCount === 1) {
+      // Second scan - Student wants to enter campus
+      setPendingAction({
+        type: 'entry',
+        data: data,
+        identifier: identifier,
+        requestType: requestType,
+        outpassId: data.details.id
+      });
+      setEntryModalVisible(true);
+      toast.success("Return scan detected - Confirm campus entry");
+    } else {
+      toast.info("Outpass already completed");
+    }
+  };
+
+  // 🚀 UPDATED: Confirm Exit from Campus - supports both tables
+  const handleConfirmExit = async () => {
+    if (!pendingAction) return;
+
+    try {
+      setActionLoading(true);
+      
+      const response = await axios.post(
+        `${API_BASE_URL}/outpass-route/outpass/confirm-exit/${pendingAction.identifier}`,
+        {
+          outpass_id: pendingAction.outpassId,
+          request_type: pendingAction.requestType // Send request type to backend
+        }
+      );
+
+      if (response.data.success) {
+        toast.success("Campus exit confirmed! Scan again when returning.");
+        setExitModalVisible(false);
+        setPendingAction(null);
+        setOutpassData(null); // Clear current outpass data
+        
+        // DON'T auto-refresh - wait for next scan
+      } else {
+        toast.error(response.data.message || "Failed to confirm exit");
+      }
+    } catch (error) {
+      console.error("Error confirming exit:", error);
+      toast.error("Error confirming campus exit");
+    } finally {
+      setActionLoading(false);
+      // Clear input and refocus after action
+      setHostelId("");
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }
+  };
+
+  // 🚀 UPDATED: Confirm Entry to Campus - supports both tables
+  const handleConfirmEntry = async () => {
+    if (!pendingAction) return;
+
+    try {
+      setActionLoading(true);
+      
+      const response = await axios.post(
+        `${API_BASE_URL}/outpass-route/outpass/confirm-entry/${pendingAction.identifier}`,
+        {
+          outpass_id: pendingAction.outpassId,
+          request_type: pendingAction.requestType // Send request type to backend
+        }
+      );
+
+      if (response.data.success) {
+        toast.success("Campus entry confirmed - Outpass completed!");
+        setEntryModalVisible(false);
+        setPendingAction(null);
+        setOutpassData(null); // Clear current outpass data
+        
+        // DON'T auto-refresh - ready for next scan
+      } else {
+        toast.error(response.data.message || "Failed to confirm entry");
+      }
+    } catch (error) {
+      console.error("Error confirming entry:", error);
+      toast.error("Error confirming campus entry");
+    } finally {
+      setActionLoading(false);
+      // Clear input and refocus after action
+      setHostelId("");
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }
+  };
+
+  // 🚀 NEW: Cancel Action
+  const handleCancelAction = () => {
+    setExitModalVisible(false);
+    setEntryModalVisible(false);
+    setPendingAction(null);
+    
+    // Clear input and refocus
+    setHostelId("");
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
   // Fetch student image as blob
-  const fetchStudentImage = async (hostelId) => {
+  const fetchStudentImage = async (identifier) => {
     try {
       const response = await axios.get(
-        `${API_BASE_URL}/outpass-route/outpass/student-image/${hostelId}`,
+        `${API_BASE_URL}/outpass-route/outpass/student-image/${identifier}`,
         {
           responseType: "blob",
         }
@@ -194,6 +388,9 @@ const QRScanner = () => {
     setOutpassData(null);
     setStudentImage(null);
     setHostelId("");
+    setPendingAction(null);
+    setExitModalVisible(false);
+    setEntryModalVisible(false);
     toast.success("Ready for next scan");
     if (inputRef.current) {
       inputRef.current.focus();
@@ -268,14 +465,14 @@ const QRScanner = () => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ flex: 1 }}>
               <Title level={4} className="qrscanner-card-title">
-                Outpass Details
+                {outpassData.request_type === 'leave' ? 'Leave Pass Details' : 'Outpass Details'}
               </Title>
 
               <p>
                 <strong>Name:</strong> {outpassData.details?.name || "N/A"}
               </p>
               <p>
-                <strong>Hostel ID:</strong> {outpassData.details?.hostel_id || "N/A"}
+                <strong>{outpassData.request_type === 'leave' ? 'Roll No:' : 'Hostel ID:'}</strong> {outpassData.details?.identifier || "N/A"}
               </p>
               <p>
                 <strong>From Date:</strong>{" "}
@@ -296,6 +493,32 @@ const QRScanner = () => {
               <p>
                 <strong>Valid Until:</strong> {formatDateTime(outpassData.valid_until)}
               </p>
+              
+              {/* 🚀 NEW: Show Exit/Entry Times if available */}
+              {outpassData.details?.exit_time && (
+                <p>
+                  <strong>Campus Exit:</strong> {formatDateTime(outpassData.details.exit_time)}
+                </p>
+              )}
+              {outpassData.details?.entry_time && (
+                <p>
+                  <strong>Campus Entry:</strong> {formatDateTime(outpassData.details.entry_time)}
+                </p>
+              )}
+              
+              {/* 🚀 NEW: Show request type badge */}
+              <div style={{ marginTop: '8px' }}>
+                <span style={{
+                  background: outpassData.request_type === 'leave' ? '#e6f7ff' : '#f6ffed',
+                  color: outpassData.request_type === 'leave' ? '#1890ff' : '#52c41a',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}>
+                  {outpassData.request_type === 'leave' ? 'LEAVE PASS' : 'OUTPASS'}
+                </span>
+              </div>
             </div>
 
             {studentImage && (
@@ -317,17 +540,22 @@ const QRScanner = () => {
           <div className="qrscanner-status" style={{ marginTop: "16px" }}>
             {outpassData.status === "Valid" && (
               <Text strong className="qrscanner-status-valid">
-                <CheckCircleOutlined /> Outpass is Valid
+                <CheckCircleOutlined /> {outpassData.request_type === 'leave' ? 'Leave Pass' : 'Outpass'} is Valid
               </Text>
             )}
             {outpassData.status === "Expired" && (
               <Text strong className="qrscanner-status-expired">
-                <CloseCircleOutlined /> Outpass Expired
+                <CloseCircleOutlined /> {outpassData.request_type === 'leave' ? 'Leave Pass' : 'Outpass'} Expired
+              </Text>
+            )}
+            {outpassData.status === "Late Entry" && (
+              <Text strong className="qrscanner-status-late-entry">
+                <ExclamationCircleOutlined /> Late Entry - After 9 PM
               </Text>
             )}
             {outpassData.status === "Rejected" && (
               <Text strong className="qrscanner-status-rejected">
-                <CloseCircleOutlined /> Outpass Rejected
+                <CloseCircleOutlined /> {outpassData.request_type === 'leave' ? 'Leave Pass' : 'Outpass'} Rejected
               </Text>
             )}
             {outpassData.status === "Accepted" && (
@@ -335,9 +563,164 @@ const QRScanner = () => {
                 <ClockCircleOutlined /> Approved - Not Yet Active
               </Text>
             )}
+            {outpassData.status === "Completed" && (
+              <Text strong className="qrscanner-status-completed">
+                <CheckCircleOutlined /> {outpassData.request_type === 'leave' ? 'Leave Pass' : 'Outpass'} Completed
+              </Text>
+            )}
           </div>
         </Card>
       )}
+
+      {/* 🚀 UPDATED: EXIT CONFIRMATION MODAL - supports both tables */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <LogoutOutlined style={{ color: '#1890ff' }} />
+            <span>Confirm Campus Exit</span>
+          </div>
+        }
+        open={exitModalVisible}
+        onOk={handleConfirmExit}
+        onCancel={handleCancelAction}
+        confirmLoading={actionLoading}
+        okText="Confirm Exit"
+        cancelText="Cancel"
+        okButtonProps={{
+          type: "primary",
+          style: { backgroundColor: '#1890ff' }
+        }}
+        maskClosable={false}
+      >
+        {pendingAction && (
+          <div>
+            <div style={{ 
+              backgroundColor: '#e6f7ff', 
+              border: '1px solid #91d5ff', 
+              borderRadius: '6px', 
+              padding: '16px', 
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              <Title level={4} style={{ margin: '0 0 8px 0', color: '#1890ff' }}>
+                {pendingAction.data.details?.name}
+              </Title>
+              <Text style={{ color: '#666' }}>
+                {pendingAction.requestType === 'leave' ? 'Roll No:' : 'Hostel ID:'} {pendingAction.identifier}
+              </Text>
+              <br />
+              <span style={{
+                background: pendingAction.requestType === 'leave' ? '#e6f7ff' : '#f6ffed',
+                color: pendingAction.requestType === 'leave' ? '#1890ff' : '#52c41a',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                marginTop: '4px',
+                display: 'inline-block'
+              }}>
+                {pendingAction.requestType === 'leave' ? 'LEAVE PASS' : 'OUTPASS'}
+              </span>
+            </div>
+
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <LogoutOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: '12px' }} />
+              <Title level={4} style={{ margin: '0', color: '#1890ff' }}>
+                Student Leaving Campus
+              </Title>
+              <Text style={{ color: '#666', fontSize: '14px' }}>
+                Click "Confirm Exit" to record the campus departure time
+              </Text>
+            </div>
+
+            <div style={{ 
+              backgroundColor: '#f6f6f6', 
+              padding: '12px', 
+              borderRadius: '4px',
+              textAlign: 'center'
+            }}>
+              <Text style={{ fontSize: '13px', color: '#666' }}>
+                <strong>Current Time:</strong> {currentTime}
+              </Text>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 🚀 UPDATED: ENTRY CONFIRMATION MODAL - supports both tables */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <LoginOutlined style={{ color: '#52c41a' }} />
+            <span>Confirm Campus Entry</span>
+          </div>
+        }
+        open={entryModalVisible}
+        onOk={handleConfirmEntry}
+        onCancel={handleCancelAction}
+        confirmLoading={actionLoading}
+        okText="Confirm Entry"
+        cancelText="Cancel"
+        okButtonProps={{
+          type: "primary",
+          style: { backgroundColor: '#52c41a', borderColor: '#52c41a' }
+        }}
+        maskClosable={false}
+      >
+        {pendingAction && (
+          <div>
+            <div style={{ 
+              backgroundColor: '#f6ffed', 
+              border: '1px solid #b7eb8f', 
+              borderRadius: '6px', 
+              padding: '16px', 
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              <Title level={4} style={{ margin: '0 0 8px 0', color: '#52c41a' }}>
+                {pendingAction.data.details?.name}
+              </Title>
+              <Text style={{ color: '#666' }}>
+                {pendingAction.requestType === 'leave' ? 'Roll No:' : 'Hostel ID:'} {pendingAction.identifier}
+              </Text>
+              <br />
+              <span style={{
+                background: pendingAction.requestType === 'leave' ? '#e6f7ff' : '#f6ffed',
+                color: pendingAction.requestType === 'leave' ? '#1890ff' : '#52c41a',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                marginTop: '4px',
+                display: 'inline-block'
+              }}>
+                {pendingAction.requestType === 'leave' ? 'LEAVE PASS' : 'OUTPASS'}
+              </span>
+            </div>
+
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <LoginOutlined style={{ fontSize: '48px', color: '#52c41a', marginBottom: '12px' }} />
+              <Title level={4} style={{ margin: '0', color: '#52c41a' }}>
+                Student Returning to Campus
+              </Title>
+              <Text style={{ color: '#666', fontSize: '14px' }}>
+                Click "Confirm Entry" to complete the {pendingAction.requestType === 'leave' ? 'leave pass' : 'outpass'} and record return time
+              </Text>
+            </div>
+
+            <div style={{ 
+              backgroundColor: '#f6f6f6', 
+              padding: '12px', 
+              borderRadius: '4px',
+              textAlign: 'center'
+            }}>
+              <Text style={{ fontSize: '13px', color: '#666' }}>
+                <strong>Current Time:</strong> {currentTime}
+              </Text>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
