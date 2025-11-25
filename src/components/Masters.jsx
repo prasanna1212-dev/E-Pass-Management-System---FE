@@ -1,9 +1,15 @@
 import React, { useState } from "react";
 import "../styles/Masters.css";
 import EscalationMaster from "./EscalationMaster.jsx";
+import DivisionMaster from "./DivisionMaster.jsx";
+import DegreeMaster from "./DegreeMaster.jsx";
+import DepartmentMaster from "./DepartmentMaster.jsx";
 
 const SUBTABS = [
   { key: "escalation", label: "Escalation Masters" },
+  { key: "division", label: "Division Master" },
+  { key: "degree", label: "Degree Master" },
+  { key: "department", label: "Department Master" },
   // later you can add more: { key: "something", label: "Something Else" }
 ];
 
@@ -39,6 +45,9 @@ function Masters() {
       {/* Tab Panels */}
       <div className="masters-tab-panels">
         {activeTab === "escalation" && <EscalationMaster />}
+        {activeTab === "division" && <DivisionMaster />}
+        {activeTab === "degree" && <DegreeMaster />}
+        {activeTab === "department" && <DepartmentMaster />}
         {/* future tabs: 
           {activeTab === "something" && <SomethingMaster />} 
         */}
