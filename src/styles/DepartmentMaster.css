@@ -1,0 +1,72 @@
+.masters-page {
+  padding: 24px 32px;
+  background-color: #f5f7fb;
+  min-height: 100vh;
+}
+
+.masters-header {
+  margin-bottom: 16px;
+}
+
+.masters-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.masters-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.masters-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+}
+
+.masters-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.masters-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.masters-card-description {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.masters-add-btn {
+  border-radius: 999px;
+  font-weight: 500;
+  padding: 0 18px;
+}
+
+.masters-card .ant-table {
+  font-size: 13px;
+}
+
+.masters-card .ant-table-thead > tr > th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+.masters-card .ant-table-tbody > tr > td {
+  padding: 12px 16px;
+}
+
+.masters-card .ant-btn.ant-btn-sm {
+  border-radius: 6px;
+}
