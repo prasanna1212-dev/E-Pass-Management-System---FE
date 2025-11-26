@@ -1360,14 +1360,14 @@ const ReportsSection = () => {
             };
 
             // Try new API first, then fallback - like OutPassRequest
-            let response = await fetch(`${API_BASE_URL}/outpass-route/reports/send-immediate`, {
+            let response = await fetch(`${API_BASE_URL}/reports-route/reports/send-immediate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(emailData)
             });
 
             if (!response.ok) {
-                response = await fetch(`${API_BASE_URL}/outpass-route/reports/send-immediate`, {
+                response = await fetch(`${API_BASE_URL}/reports-route/reports/send-immediate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(emailData)
