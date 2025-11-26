@@ -514,10 +514,10 @@ const ReportsSection = () => {
             console.log('📅 Fetching existing schedules...');
 
             // Try new API first, then fallback - like OutPassRequest
-            let res = await fetch(`${API_BASE_URL}/outpass-route/reports/schedules`);
+            let res = await fetch(`${API_BASE_URL}/reports-route/reports/schedules`);
 
             if (!res.ok) {
-                res = await fetch(`${API_BASE_URL}/outpass-route/reports/schedules`);
+                res = await fetch(`${API_BASE_URL}/reports-route/reports/schedules`);
             }
 
             if (!res.ok) throw new Error('Failed to fetch schedules');
@@ -549,12 +549,12 @@ const ReportsSection = () => {
             console.log('🗑️ Cancelling schedule:', scheduleId);
 
             // Try new API first, then fallback - like OutPassRequest
-            let res = await fetch(`${API_BASE_URL}/outpass-route/reports/schedules/${scheduleId}`, {
+            let res = await fetch(`${API_BASE_URL}/reports-route/reports/schedules/${scheduleId}`, {
                 method: 'DELETE',
             });
 
             if (!res.ok) {
-                res = await fetch(`${API_BASE_URL}/outpass-route/reports/schedules/${scheduleId}`, {
+                res = await fetch(`${API_BASE_URL}/reports-route/reports/schedules/${scheduleId}`, {
                     method: 'DELETE',
                 });
             }
@@ -1035,8 +1035,8 @@ const ReportsSection = () => {
             };
 
             const endpoint = values.reportType === 'violations'
-                ? '/outpass-route/reports/export-violations'
-                : '/outpass-route/reports/export-full';
+                ? '/reports-route/reports/export-violations'
+                : '/reports-route/reports/export-full';
 
             // Try new API structure first, then fallback - like OutPassRequest
             let response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -1047,7 +1047,7 @@ const ReportsSection = () => {
 
             if (!response.ok) {
                 // Fallback to old API structure
-                const oldEndpoint = endpoint.replace('/api/outpass-route/', '/outpass-route/');
+                const oldEndpoint = endpoint.replace('/outpass-route/', '/outpass-route/');
                 response = await fetch(`${API_BASE_URL}${oldEndpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
