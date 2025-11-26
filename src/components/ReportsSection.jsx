@@ -1248,7 +1248,7 @@ const ReportsSection = () => {
             console.log('📧 Sending enhanced schedule data with Leave/Outpass violations:', enhancedScheduleData);
 
             // Try new API first, then fallback
-            let response = await fetch(`${API_BASE_URL}/outpass-route/reports/enhanced-schedule`, {
+            let response = await fetch(`${API_BASE_URL}/reports-route/reports/enhanced-schedule`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(enhancedScheduleData)
