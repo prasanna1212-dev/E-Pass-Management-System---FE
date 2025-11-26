@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback,useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
 import {
@@ -163,7 +163,7 @@ const ReportsSection = () => {
         try {
             console.log('📧 Fetching escalation users from API...');
 
-            const response = await fetch(`https://172.30.6.12:5059/api/escalation-masters/getinfo`);
+            const response = await fetch('https://172.30.6.12:5059/api/escalation-masters/getinfo');
 
             if (!response.ok) {
                 throw new Error(`API Error: ${response.status}`);
@@ -239,7 +239,16 @@ const ReportsSection = () => {
             daysLate: 0,
             returnTime: null,
             expectedReturn: null,
-            dataSource: record.request_type || 'unknown' // 'outpass' or 'leave'
+            dataSource: record.request_type || 'unknown',
+
+            // 🆕 NEW: Formatted duration strings
+            lateDurationFormatted: '',
+            exceedDurationFormatted: '',
+            overdueDurationFormatted: '',
+
+            // 🆕 NEW: Status information
+            calculatedStatus: record.status,
+            isExpired: false
         };
 
         try {
@@ -247,7 +256,6 @@ const ReportsSection = () => {
             const permissionType = (record.permission || '').toLowerCase();
             const requestType = (record.request_type || '').toLowerCase();
 
-            // Enhanced permission type detection
             violations.permissionType =
                 permissionType === 'leave' || requestType === 'leave' ? 'leave' :
                     permissionType === 'permission' || permissionType === 'outpass' || requestType === 'outpass' ? 'outpass' :
@@ -255,76 +263,75 @@ const ReportsSection = () => {
 
             console.log(`🔍 Analyzing ${record.name}: Type=${violations.permissionType}, Source=${violations.dataSource}`);
 
-            // 🔍 STEP 2: Enhanced validation with better error handling
+            // 🔍 STEP 2: Calculate expected return and determine status
+            let expectedReturn;
+            if (record.expected_return_datetime) {
+                expectedReturn = dayjs(record.expected_return_datetime);
+            } else if (record.date_to && record.time_in) {
+                const dateStr = record.date_to.includes('T') ?
+                    record.date_to.split('T')[0] : record.date_to;
+                expectedReturn = dayjs(`${dateStr} ${record.time_in}`);
+            }
+
+            if (expectedReturn && expectedReturn.isValid()) {
+                violations.expectedReturn = expectedReturn;
+
+                // 🆕 NEW: Check if pass is expired
+                violations.isExpired = now.isAfter(expectedReturn);
+                violations.calculatedStatus = determineRecordStatus(record);
+
+                // Calculate overdue duration if expired and no entry
+                if (violations.isExpired && !record.entry_time) {
+                    violations.isOverdue = true;
+                    violations.overdueDuration = now.diff(expectedReturn, 'hour', true);
+                    violations.overdueDurationFormatted = formatDuration(violations.overdueDuration);
+                }
+            }
+
+            // 🔍 STEP 3: Enhanced validation with better error handling
             if (!record.entry_time) {
-                // Check for overdue (accepted but no entry)
-                if (record.status === 'Accepted') {
-                    let expectedReturn;
-
-                    // 🔥 FIXED: Use the pre-calculated expected_return_datetime if available
-                    if (record.expected_return_datetime) {
-                        expectedReturn = dayjs(record.expected_return_datetime);
-                    } else {
-                        // Fallback to manual calculation
-                        expectedReturn = dayjs(`${record.date_to} ${record.time_in}`);
-                    }
-
-                    if (expectedReturn.isValid() && now.isAfter(expectedReturn)) {
-                        violations.isOverdue = true;
-                        violations.overdueDuration = now.diff(expectedReturn, 'hour', true);
-                        violations.expectedReturn = expectedReturn;
-                    }
+                // For records without entry time, check overdue status
+                if (violations.isOverdue) {
+                    console.log(`⏰ Overdue: ${record.name} ${violations.overdueDurationFormatted}`);
                 }
                 violationCache.set(cacheKey, violations);
                 return violations;
             }
 
-            // 🔍 STEP 3: Enhanced time parsing with proper fallback
-            let expectedReturn;
+            // 🔍 STEP 4: Analyze actual return vs expected return
             let actualReturn = dayjs(record.entry_time);
 
-            if (record.expected_return_datetime) {
-                // 🔥 NEW: Use pre-calculated datetime for accuracy
-                expectedReturn = dayjs(record.expected_return_datetime);
-            } else {
-                // Fallback to manual combination
-                if (record.date_to && record.time_in) {
-                    // Handle different date formats
-                    const dateStr = record.date_to.includes('T') ?
-                        record.date_to.split('T')[0] :
-                        record.date_to;
-                    expectedReturn = dayjs(`${dateStr} ${record.time_in}`);
-                }
-            }
-
-            if (!actualReturn.isValid() || !expectedReturn.isValid()) {
+            if (!actualReturn.isValid() || !expectedReturn || !expectedReturn.isValid()) {
                 console.warn(`⚠️ Invalid dates for ${record.name}: actual=${record.entry_time}, expected=${expectedReturn}`);
                 violationCache.set(cacheKey, violations);
                 return violations;
             }
 
             violations.returnTime = actualReturn;
-            violations.expectedReturn = expectedReturn;
 
-            // 🔍 STEP 4: Enhanced timing calculations
+            // 🔍 STEP 5: Enhanced timing calculations with formatted durations
             const timeDifferenceHours = actualReturn.diff(expectedReturn, 'hour', true);
             const daysDifference = Math.max(0, actualReturn.diff(expectedReturn.startOf('day'), 'day'));
 
             violations.lateDuration = Math.max(0, timeDifferenceHours);
             violations.daysLate = daysDifference;
 
-            console.log(`📊 ${record.name}: ${timeDifferenceHours.toFixed(2)}h difference, ${daysDifference} days late`);
+            // 🆕 NEW: Format duration strings
+            violations.lateDurationFormatted = formatDuration(violations.lateDuration);
+            violations.exceedDuration = Math.max(0, timeDifferenceHours);
+            violations.exceedDurationFormatted = formatDuration(violations.exceedDuration);
 
-            // 🔍 STEP 5: Permission-specific violation analysis
+            console.log(`📊 ${record.name}: ${violations.lateDurationFormatted} difference, ${daysDifference} days late`);
+
+            // 🔍 STEP 6: Permission-specific violation analysis with formatted durations
             if (violations.permissionType === 'leave') {
                 // 📋 LEAVE TYPE VIOLATIONS
-
                 if (daysDifference > 0) {
                     // 🚨 CRITICAL: Returned on later days
                     violations.isCritical = true;
                     violations.isLate = true;
                     violations.violationType = 'leave_critical';
-                    console.log(`🚨 Leave Critical: ${record.name} returned ${daysDifference} days late`);
+                    console.log(`🚨 Leave Critical: ${record.name} returned ${daysDifference} days late (${violations.lateDurationFormatted})`);
 
                 } else if (daysDifference === 0) {
                     // Same day return - check time
@@ -335,43 +342,23 @@ const ReportsSection = () => {
                         violations.isLate = true;
                         violations.isAfterHours = true;
                         violations.violationType = 'leave_late';
-                        console.log(`⚠️ Leave Late: ${record.name} returned at ${actualReturn.format('HH:mm')} (after 9PM)`);
+                        console.log(`⚠️ Leave Late: ${record.name} returned at ${actualReturn.format('HH:mm')} (${violations.lateDurationFormatted} late)`);
 
                     } else if (timeDifferenceHours > 0.25) {
                         // Minor late return (before 9 PM but late)
                         violations.isLate = true;
                         violations.violationType = 'leave_late';
-                        console.log(`⏰ Leave Minor Late: ${record.name} ${Math.round(timeDifferenceHours * 60)}min late`);
+                        console.log(`⏰ Leave Minor Late: ${record.name} ${violations.lateDurationFormatted} late`);
                     }
                 }
 
             } else if (violations.permissionType === 'outpass') {
                 // 🎯 OUTPASS TYPE VIOLATIONS
-
-                // Calculate requested duration more accurately
-                let requestedDurationHours = 2; // Default
-
-                if (record.time_out && record.time_in) {
-                    // Calculate duration from time fields
-                    const outTime = dayjs(`${record.date_from || record.date_to} ${record.time_out}`);
-                    if (outTime.isValid()) {
-                        requestedDurationHours = expectedReturn.diff(outTime, 'hour', true);
-                    }
-                } else if (record.duration) {
-                    // Parse duration string if available (e.g., "2H 30M")
-                    const durationMatch = record.duration.match(/(\d+)H.*?(\d+)M/);
-                    if (durationMatch) {
-                        requestedDurationHours = parseInt(durationMatch[1]) + (parseInt(durationMatch[2]) / 60);
-                    }
-                }
-
-                violations.exceedDuration = Math.max(0, timeDifferenceHours);
-
                 if (violations.exceedDuration > 0) {
                     violations.isLate = true;
 
-                    // Check for extended duration (2+ hours over)
-                    if (violations.exceedDuration >= 2.0) {
+                    // Check for extended duration (24+ hours over = 1+ days)
+                    if (violations.exceedDuration >= 24.0) {
                         violations.isExtended = true;
 
                         // Check for after hours (9 PM+) on same day
@@ -382,15 +369,20 @@ const ReportsSection = () => {
                             violations.isAfterHours = true;
                             violations.isCritical = true;
                             violations.violationType = 'outpass_critical';
-                            console.log(`🚨 Outpass Critical: ${record.name} ${Math.round(violations.exceedDuration)}h over + after 9PM`);
+                            console.log(`🚨 Outpass Critical: ${record.name} ${violations.exceedDurationFormatted} over + after 9PM`);
                         } else {
                             violations.violationType = 'outpass_extended';
-                            console.log(`🔥 Outpass Extended: ${record.name} ${Math.round(violations.exceedDuration)}h over`);
+                            console.log(`🔥 Outpass Extended: ${record.name} ${violations.exceedDurationFormatted} over`);
                         }
+                    } else if (violations.exceedDuration >= 2.0) {
+                        // Regular extended (2-23 hours over)
+                        violations.isExtended = true;
+                        violations.violationType = 'outpass_extended';
+                        console.log(`🔥 Outpass Extended: ${record.name} ${violations.exceedDurationFormatted} over`);
                     } else {
                         // Regular duration exceeded (less than 2 hours)
                         violations.violationType = 'outpass_duration';
-                        console.log(`⏰ Outpass Duration: ${record.name} ${Math.round(violations.exceedDuration * 60)}min over`);
+                        console.log(`⏰ Outpass Duration: ${record.name} ${violations.exceedDurationFormatted} over`);
                     }
 
                     // Separate after hours check
@@ -406,7 +398,7 @@ const ReportsSection = () => {
                     violations.isLate = true;
                     violations.lateDuration = timeDifferenceHours;
 
-                    if (timeDifferenceHours >= 2.0) {
+                    if (timeDifferenceHours >= 24.0) {
                         violations.isExtended = true;
                     }
 
@@ -419,15 +411,8 @@ const ReportsSection = () => {
                     }
 
                     violations.violationType = 'legacy';
-                    console.log(`🔄 Legacy: ${record.name} ${Math.round(timeDifferenceHours)}h late`);
+                    console.log(`🔄 Legacy: ${record.name} ${violations.lateDurationFormatted} late`);
                 }
-            }
-
-            // 🔍 STEP 6: Final overdue check
-            if (record.status === 'Accepted' && !record.entry_time && now.isAfter(expectedReturn)) {
-                violations.isOverdue = true;
-                violations.overdueDuration = now.diff(expectedReturn, 'hour', true);
-                console.log(`📅 Overdue: ${record.name} ${Math.round(violations.overdueDuration)}h overdue`);
             }
 
         } catch (error) {
@@ -694,34 +679,57 @@ const ReportsSection = () => {
             ));
         }
 
-        // 2. Date Range Filter with robust date handling from reference
+        // 🛠️ FIXED: Enhanced Date Range Filter with multiple date field support
         if (dateRange && dateRange.length === 2) {
             const [start, end] = dateRange;
+            const startDate = dayjs(start).startOf('day');
+            const endDate = dayjs(end).endOf('day');
+
             filtered = filtered.filter(item => {
                 try {
-                    const dateFrom = dayjs(item.date_from);
-                    const dateTo = dayjs(item.date_to);
-                    const startDate = dayjs(start);
-                    const endDate = dayjs(end);
+                    // Check multiple date fields for comprehensive filtering
+                    const checkDates = [];
 
-                    // Check if date_from or date_to falls within the selected range
-                    const fromInRange = dateFrom.isBetween(startDate, endDate, 'day', '[]');
-                    const toInRange = dateTo.isBetween(startDate, endDate, 'day', '[]');
+                    // Add date_from and date_to if they exist
+                    if (item.date_from) checkDates.push(dayjs(item.date_from));
+                    if (item.date_to) checkDates.push(dayjs(item.date_to));
 
-                    // Also check if the selected range overlaps with the item's date range
-                    const overlaps = dateFrom.isSameOrBefore(endDate) && dateTo.isSameOrAfter(startDate);
+                    // Add created_at and updated_at for additional context
+                    if (item.created_at) checkDates.push(dayjs(item.created_at));
+                    if (item.updated_at) checkDates.push(dayjs(item.updated_at));
 
-                    return fromInRange || toInRange || overlaps;
+                    // Add entry and exit times if they exist
+                    if (item.entry_time) checkDates.push(dayjs(item.entry_time));
+                    if (item.exit_time) checkDates.push(dayjs(item.exit_time));
+
+                    // Filter out invalid dates
+                    const validDates = checkDates.filter(date => date.isValid());
+
+                    if (validDates.length === 0) {
+                        return true; // Include if no valid dates found
+                    }
+
+                    // Check if any of the dates fall within the selected range
+                    return validDates.some(date => {
+                        return date.isBetween(startDate, endDate, null, '[]') ||
+                            date.isSame(startDate, 'day') ||
+                            date.isSame(endDate, 'day');
+                    });
+
                 } catch (error) {
-                    console.warn('Date filtering error:', error);
+                    console.warn('Date filtering error for item:', item.id, error);
                     return true; // Include item if date parsing fails
                 }
             });
         }
 
-        // 3. Status Filter
+        // 3. Status Filter - now includes calculated status
         if (statusFilter && statusFilter !== "All") {
-            filtered = filtered.filter(item => item.status === statusFilter);
+            filtered = filtered.filter(item => {
+                const violationData = analyzeViolations(item);
+                const displayStatus = violationData.calculatedStatus || item.status;
+                return displayStatus === statusFilter;
+            });
         }
 
         // 4. Permission Filter
@@ -736,7 +744,7 @@ const ReportsSection = () => {
             );
         }
 
-        // ✅ UPDATED: Enhanced violation filter with proper Leave/Outpass categorization
+        // 6. Violation Filter (unchanged)
         if (violationFilter && violationFilter !== "All") {
             filtered = filtered.filter(item => {
                 const violationData = analyzeViolations(item);
@@ -748,31 +756,36 @@ const ReportsSection = () => {
                     case "Clean":
                         return !violationData.isLate && !violationData.isOverdue;
 
-                    case "LeaveCritical": // 🆕 NEW: Leave critical violations
+                    case "LeaveCritical":
                         return violationData.violationType === 'leave_critical';
 
-                    case "LeaveLate": // 🆕 NEW: Leave late returns
+                    case "LeaveLate":
                         return violationData.violationType === 'leave_late';
 
-                    case "OutpassCritical": // 🆕 NEW: Outpass critical violations
+                    case "OutpassCritical":
                         return violationData.violationType === 'outpass_critical';
 
-                    case "OutpassExtended": // 🆕 NEW: Outpass extended duration
+                    case "OutpassExtended":
                         return violationData.violationType === 'outpass_extended';
 
-                    case "OutpassDuration": // 🆕 NEW: Outpass duration exceeded
+                    case "OutpassDuration":
                         return violationData.violationType === 'outpass_duration';
 
-                    case "AfterHours": // After hours (both types)
+                    case "AfterHours":
                         return violationData.isAfterHours;
 
-                    case "Late": // Any late entries
+                    case "Late":
                         return violationData.isLate;
 
-                    case "Overdue": // Overdue entries
+                    case "Overdue":
                         return violationData.isOverdue;
 
-                    // Legacy filters for backward compatibility
+                    case "Expired":
+                        return violationData.calculatedStatus === 'Expired';
+
+                    case "Completed":
+                        return violationData.calculatedStatus === 'Completed';
+
                     case "Extended":
                         return violationData.isExtended;
 
@@ -855,21 +868,25 @@ const ReportsSection = () => {
 
     // ✨ COMPLETELY UPDATED: Enhanced violation status renderer with proper Leave/Outpass logic
     const getAdvancedViolationStatus = (record) => {
-
-
         const violationData = analyzeViolations(record);
         const violations = [];
 
+        // 🆕 NEW: Show expired status
+        if (violationData.isExpired && !record.entry_time) {
+            violations.push(
+                <Tag key="expired" color="red" icon={<ClockCircleOutlined />} style={{ fontWeight: 'bold' }}>
+                    EXPIRED: {violationData.overdueDurationFormatted} ago
+                </Tag>
+            );
+        }
 
-
-
-        // 🆕 LEAVE TYPE VIOLATIONS
+        // 🆕 LEAVE TYPE VIOLATIONS with formatted durations
         if (violationData.permissionType === 'leave') {
             switch (violationData.violationType) {
                 case 'leave_critical':
                     violations.push(
                         <Tag key="leave-critical" color="red" icon={<FireOutlined />} style={{ fontWeight: 'bold' }}>
-                            LEAVE CRITICAL: {violationData.daysLate}d Late Return
+                            LEAVE CRITICAL: {violationData.lateDurationFormatted} Late Return
                         </Tag>
                     );
                     break;
@@ -877,20 +894,20 @@ const ReportsSection = () => {
                 case 'leave_late':
                     violations.push(
                         <Tag key="leave-late" color="volcano" icon={<MoonOutlined />}>
-                            LEAVE LATE: After 9PM Return
+                            LEAVE LATE: {violationData.lateDurationFormatted} After Return Time
                         </Tag>
                     );
                     break;
             }
         }
 
-        // 🆕 OUTPASS TYPE VIOLATIONS  
+        // 🆕 OUTPASS TYPE VIOLATIONS with formatted durations
         else if (violationData.permissionType === 'outpass') {
             switch (violationData.violationType) {
                 case 'outpass_critical':
                     violations.push(
                         <Tag key="outpass-critical" color="red" icon={<FireOutlined />} style={{ fontWeight: 'bold' }}>
-                            OUTPASS CRITICAL: {Math.round(violationData.exceedDuration)}h Over + After 9PM
+                            OUTPASS CRITICAL: {violationData.exceedDurationFormatted} Over + After 9PM
                         </Tag>
                     );
                     break;
@@ -898,7 +915,7 @@ const ReportsSection = () => {
                 case 'outpass_extended':
                     violations.push(
                         <Tag key="outpass-extended" color="volcano" icon={<ClockCircleFilled />}>
-                            OUTPASS EXTENDED: +{Math.round(violationData.exceedDuration)}h Over Duration
+                            OUTPASS EXTENDED: {violationData.exceedDurationFormatted} Over Duration
                         </Tag>
                     );
                     break;
@@ -906,7 +923,7 @@ const ReportsSection = () => {
                 case 'outpass_duration':
                     violations.push(
                         <Tag key="outpass-duration" color="orange" icon={<ClockCircleOutlined />}>
-                            OUTPASS LATE: +{Math.round(violationData.exceedDuration * 60)}min Over
+                            OUTPASS LATE: {violationData.exceedDurationFormatted} Over
                         </Tag>
                     );
                     break;
@@ -922,24 +939,24 @@ const ReportsSection = () => {
             }
         }
 
-        // 🔄 LEGACY/UNKNOWN TYPE VIOLATIONS (backward compatibility)
+        // 🔄 LEGACY/UNKNOWN TYPE VIOLATIONS with formatted durations
         else {
             if (violationData.isCritical) {
                 violations.push(
                     <Tag key="legacy-critical" color="red" icon={<FireOutlined />} style={{ fontWeight: 'bold' }}>
-                        CRITICAL: Multiple Violations
+                        CRITICAL: Multiple Violations ({violationData.lateDurationFormatted})
                     </Tag>
                 );
             } else if (violationData.isExtended) {
                 violations.push(
                     <Tag key="legacy-extended" color="volcano" icon={<ClockCircleFilled />}>
-                        Extended: {Math.round(violationData.lateDuration)}h late
+                        Extended: {violationData.lateDurationFormatted} late
                     </Tag>
                 );
             } else if (violationData.isLate) {
                 violations.push(
                     <Tag key="legacy-late" color="orange" icon={<WarningOutlined />}>
-                        Late: {Math.round(violationData.lateDuration)}h
+                        Late: {violationData.lateDurationFormatted}
                     </Tag>
                 );
             }
@@ -953,14 +970,15 @@ const ReportsSection = () => {
             }
         }
 
-        // ✅ OVERDUE ENTRIES (all types)
-        if (violationData.isOverdue) {
-            violations.push(
-                <Tag key="overdue" color="red" icon={<WarningOutlined />}>
-                    Overdue: {Math.round(violationData.overdueDuration)}h
-                </Tag>
-            );
-        }
+
+        // // ✅ OVERDUE ENTRIES with formatted duration
+        // if (violationData.isOverdue && violationData.overdueDurationFormatted) {
+        //     violations.push(
+        //         <Tag key="overdue" color="red" icon={<WarningOutlined />}>
+        //             Overdue: {violationData.overdueDurationFormatted}
+        //         </Tag>
+        //     );
+        // }
 
         // ✅ CLEAN RECORD
         if (violations.length === 0) {
@@ -971,30 +989,75 @@ const ReportsSection = () => {
     };
 
     // Format schedule data for display
+    // Format schedule data for display
     const formatScheduleData = (schedule) => {
         try {
+            // Handle enhanced schedule data structure from your new API
             const reportTypes = typeof schedule.report_types === 'string'
                 ? JSON.parse(schedule.report_types)
                 : schedule.report_types || [];
+
+            const formats = typeof schedule.formats === 'string'
+                ? JSON.parse(schedule.formats)
+                : schedule.formats || [];
 
             const toEmails = typeof schedule.to_emails === 'string'
                 ? JSON.parse(schedule.to_emails)
                 : schedule.to_emails || [];
 
+            const ccEmails = typeof schedule.cc_emails === 'string'
+                ? JSON.parse(schedule.cc_emails)
+                : schedule.cc_emails || [];
+
+            const bccEmails = typeof schedule.bcc_emails === 'string'
+                ? JSON.parse(schedule.bcc_emails)
+                : schedule.bcc_emails || [];
+
+            // ✨ ENHANCED: Parse enhanced scheduling rule
+            const scheduleRule = typeof schedule.schedule_rule === 'string'
+                ? JSON.parse(schedule.schedule_rule)
+                : schedule.schedule_rule || {};
+
+            const weekdays = typeof schedule.weekdays === 'string'
+                ? JSON.parse(schedule.weekdays)
+                : schedule.weekdays || [];
+
             return {
                 ...schedule,
                 reportTypes: reportTypes,
-                emails: toEmails
+                formats: formats,
+                emails: toEmails,
+                ccEmails: ccEmails,
+                bccEmails: bccEmails,
+                // ✨ ENHANCED: Add enhanced scheduling fields
+                enhancedScheduleRule: scheduleRule,
+                weekdaysArray: weekdays,
+                isEnhanced: schedule.is_enhanced || false,
+                scheduleSummary: schedule.schedule_summary || '',
+                recipientsCount: schedule.recipients_count || {
+                    to: toEmails.length,
+                    cc: ccEmails.length,
+                    bcc: bccEmails.length
+                }
             };
         } catch (error) {
             console.warn('Format schedule error:', error);
             return {
                 ...schedule,
                 reportTypes: [],
-                emails: []
+                formats: [],
+                emails: [],
+                ccEmails: [],
+                bccEmails: [],
+                enhancedScheduleRule: {},
+                weekdaysArray: [],
+                isEnhanced: false,
+                scheduleSummary: '',
+                recipientsCount: { to: 0, cc: 0, bcc: 0 }
             };
         }
     };
+
 
     // Handle schedule details view
     const viewScheduleDetails = (schedule) => {
@@ -1035,8 +1098,8 @@ const ReportsSection = () => {
             };
 
             const endpoint = values.reportType === 'violations'
-                ? '/reports-route/reports/export-violations'
-                : '/reports-route/reports/export-full';
+                ? '/api/reports-route/reports/export-violations'
+                : '/api/reports-route/reports/export-full';
 
             // Try new API structure first, then fallback - like OutPassRequest
             let response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -1047,7 +1110,7 @@ const ReportsSection = () => {
 
             if (!response.ok) {
                 // Fallback to old API structure
-                const oldEndpoint = endpoint.replace('/outpass-route/', '/outpass-route/');
+                const oldEndpoint = endpoint.replace('/api/reports-route/', '/reports-route/');
                 response = await fetch(`${API_BASE_URL}${oldEndpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1272,7 +1335,7 @@ const ReportsSection = () => {
                     enhancedViolations: true
                 };
 
-                response = await fetch(`${API_BASE_URL}/outpass-route/reports/schedule`, {
+                response = await fetch(`${API_BASE_URL}/reports-route/reports/schedule`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(fallbackData)
@@ -1453,19 +1516,24 @@ const ReportsSection = () => {
         },
         {
             title: "Status",
-            dataIndex: "status",
             key: "status",
             width: 120,
-            render: (status) => {
+            render: (_, record) => {
+                const violationData = analyzeViolations(record);
+                const displayStatus = violationData.calculatedStatus || record.status;
+
                 const colors = {
                     'Pending': 'processing',
                     'Accepted': 'success',
                     'Rejected': 'error',
                     'Renewed': 'cyan',
                     'Completed': 'purple',
+                    'Expired': 'red',
                     'Renewal Pending': 'warning'
                 };
-                return <Tag color={colors[status] || 'default'}>{status}</Tag>;
+
+                return <Tag color={colors[displayStatus] || 'default'}>{displayStatus}</Tag>;
+
             }
         },
         {
@@ -1603,9 +1671,9 @@ const ReportsSection = () => {
             render: (_, record) => (
                 <div>
                     <Tag color="success" icon={<PlayCircleOutlined />}>Active</Tag>
-                    {record.is_enhanced && (
+                    {/* {record.is_enhanced && (
                         <Tag color="green" size="small">Enhanced</Tag>
-                    )}
+                    )} */}
                     <br />
                     <Text type="secondary" style={{ fontSize: '11px' }}>
                         Created: {dayjs(record.created_at).format('MMM D, YYYY')}
@@ -1677,259 +1745,356 @@ const ReportsSection = () => {
     ];
     console.log("violation--->✝✝✝✝", filteredData);
 
-  const EnhancedEmailSelect = ({
-    value = [],
-    onChange,
-    placeholder = "Enter email addresses or select users...",
-    loading = false,
-    formInstance = null,  // 🆕 NEW: Pass form instance for Quick Add
-    fieldName = 'toEmails'  // 🆕 NEW: Field name for Quick Add functionality
-}) => {
-    const [searchValue, setSearchValue] = useState('');
+    const EnhancedEmailSelect = ({
+        value = [],
+        onChange,
+        placeholder = "Enter email addresses or select users...",
+        loading = false,
+        formInstance = null,  // 🆕 NEW: Pass form instance for Quick Add
+        fieldName = 'toEmails'  // 🆕 NEW: Field name for Quick Add functionality
+    }) => {
+        const [searchValue, setSearchValue] = useState('');
 
-    // 🔧 FIXED: Improved filtering logic with better search matching
-    const filteredUsers = useMemo(() => {
-        if (!searchValue || searchValue.trim().length === 0) {
-            return escalationUsers;
-        }
-
-        const searchTerm = searchValue.toLowerCase().trim();
-        
-        return escalationUsers.filter(user => {
-            // 🔧 FIXED: Multiple search criteria with better matching
-            const nameMatch = user.name.toLowerCase().includes(searchTerm);
-            const emailMatch = user.email.toLowerCase().includes(searchTerm);
-            const designationMatch = user.designation.toLowerCase().includes(searchTerm);
-            
-            // Also search in the combined searchText
-            const combinedMatch = user.searchText.includes(searchTerm);
-            
-            return nameMatch || emailMatch || designationMatch || combinedMatch;
-        });
-    }, [searchValue, escalationUsers]);
-
-    // Handle selection change
-    const handleChange = (newValues) => {
-        onChange?.(newValues);
-    };
-
-    // Handle search input
-    const handleSearch = (searchText) => {
-        setSearchValue(searchText);
-    };
-
-    // Custom option renderer
-    const renderOption = (user) => (
-        <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '4px 0'
-        }}>
-            <div>
-                <div style={{ fontWeight: '500', color: '#1890ff' }}>
-                    {user.name}
-                </div>
-                <div style={{ fontSize: '12px', color: '#666' }}>
-                    {user.email}
-                </div>
-            </div>
-            <Tag size="small" color="blue" style={{ margin: 0 }}>
-                {user.designation}
-            </Tag>
-        </div>
-    );
-
-    // 🔧 FIXED: Improved options array generation
-    const options = useMemo(() => {
-        const userOptions = filteredUsers.map(user => ({
-            key: `user_${user.id}`,
-            value: user.email,
-            label: renderOption(user),
-            // 🆕 NEW: Add search metadata for better filtering
-            searchable: true,
-            userData: user
-        }));
-
-        // Manual entry option if search value looks like an email
-        const manualOptions = [];
-        if (searchValue && EMAIL_REGEX.test(searchValue.trim())) {
-            const trimmedSearch = searchValue.trim();
-            // 🔧 FIXED: Check if email already exists in users or current values
-            const emailExists = escalationUsers.some(u => u.email.toLowerCase() === trimmedSearch.toLowerCase()) ||
-                               value.some(email => email.toLowerCase() === trimmedSearch.toLowerCase());
-            
-            if (!emailExists) {
-                manualOptions.push({
-                    key: `manual_${trimmedSearch}`,
-                    value: trimmedSearch,
-                    label: (
-                        <div style={{ color: '#52c41a', fontStyle: 'italic' }}>
-                            ✍️ Add manually: {trimmedSearch}
-                        </div>
-                    ),
-                    searchable: false
-                });
+        // 🔧 FIXED: Improved filtering logic with better search matching
+        const filteredUsers = useMemo(() => {
+            if (!searchValue || searchValue.trim().length === 0) {
+                return escalationUsers;
             }
-        }
 
-        return [...userOptions, ...manualOptions];
-    }, [filteredUsers, searchValue, value]);
+            const searchTerm = searchValue.toLowerCase().trim();
 
-    // 🆕 NEW: Enhanced Quick Add function that works with any field
-    const handleQuickAdd = (designation) => {
-        if (!formInstance) {
-            toast.error('Form instance not available for Quick Add');
-            return;
-        }
+            return escalationUsers.filter(user => {
+                // 🔧 FIXED: Multiple search criteria with better matching
+                const nameMatch = user.name.toLowerCase().includes(searchTerm);
+                const emailMatch = user.email.toLowerCase().includes(searchTerm);
+                const designationMatch = user.designation.toLowerCase().includes(searchTerm);
 
-        const usersWithDesignation = escalationUsers.filter(u => u.designation === designation);
-        const currentValues = formInstance.getFieldValue(fieldName) || [];
-        const newEmails = usersWithDesignation.map(u => u.email);
-        const uniqueEmails = [...new Set([...currentValues, ...newEmails])];
-        
-        formInstance.setFieldValue(fieldName, uniqueEmails);
-        
-        // Update the current component if it's the target field
-        if (value === currentValues) {
-            handleChange(uniqueEmails);
-        }
-        
-        const fieldDisplayName = fieldName.replace('Emails', '').toUpperCase();
-        toast.success(`Added ${usersWithDesignation.length} ${designation}(s) to ${fieldDisplayName} recipients`);
+                // Also search in the combined searchText
+                const combinedMatch = user.searchText.includes(searchTerm);
+
+                return nameMatch || emailMatch || designationMatch || combinedMatch;
+            });
+        }, [searchValue, escalationUsers]);
+
+        // Handle selection change
+        const handleChange = (newValues) => {
+            onChange?.(newValues);
+            setSearchValue('');
+        };
+
+        // Handle search input
+        const handleSearch = (searchText) => {
+            setSearchValue(searchText);
+        };
+
+        // Custom option renderer
+        const renderOption = (user) => (
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '4px 0'
+            }}>
+                <div>
+                    <div style={{ fontWeight: '500', color: '#1890ff' }}>
+                        {user.name}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                        {user.email}
+                    </div>
+                </div>
+                <Tag size="small" color="blue" style={{ margin: 0 }}>
+                    {user.designation}
+                </Tag>
+            </div>
+        );
+
+        // 🔧 FIXED: Improved options array generation
+        const options = useMemo(() => {
+            const userOptions = filteredUsers.map(user => ({
+                key: `user_${user.id}`,
+                value: user.email,
+                label: renderOption(user),
+                // 🆕 NEW: Add search metadata for better filtering
+                searchable: true,
+                userData: user
+            }));
+
+            // Manual entry option if search value looks like an email
+            const manualOptions = [];
+            if (searchValue && EMAIL_REGEX.test(searchValue.trim())) {
+                const trimmedSearch = searchValue.trim();
+                // 🔧 FIXED: Check if email already exists in users or current values
+                const emailExists = escalationUsers.some(u => u.email.toLowerCase() === trimmedSearch.toLowerCase()) ||
+                    value.some(email => email.toLowerCase() === trimmedSearch.toLowerCase());
+
+                if (!emailExists) {
+                    manualOptions.push({
+                        key: `manual_${trimmedSearch}`,
+                        value: trimmedSearch,
+                        label: (
+                            <div style={{ color: '#52c41a', fontStyle: 'italic' }}>
+                                ✍️ Add manually: {trimmedSearch}
+                            </div>
+                        ),
+                        searchable: false
+                    });
+                }
+            }
+
+            return [...userOptions, ...manualOptions];
+        }, [filteredUsers, searchValue, value]);
+
+        // 🆕 NEW: Enhanced Quick Add function that works with any field
+        const handleQuickAdd = (designation) => {
+            if (!formInstance) {
+                toast.error('Form instance not available for Quick Add');
+                return;
+            }
+
+            const usersWithDesignation = escalationUsers.filter(u => u.designation === designation);
+            const currentValues = formInstance.getFieldValue(fieldName) || [];
+            const newEmails = usersWithDesignation.map(u => u.email);
+            const uniqueEmails = [...new Set([...currentValues, ...newEmails])];
+
+            formInstance.setFieldValue(fieldName, uniqueEmails);
+
+            // Update the current component if it's the target field
+            if (value === currentValues) {
+                handleChange(uniqueEmails);
+            }
+
+            const fieldDisplayName = fieldName.replace('Emails', '').toUpperCase();
+            toast.success(`Added ${usersWithDesignation.length} ${designation}(s) to ${fieldDisplayName} recipients`);
+        };
+
+
+
+
+
+        return (
+            <div>
+                <Select
+                    mode="tags"
+                    value={value}
+                    onChange={handleChange}
+                    onSearch={handleSearch}
+                    searchValue={searchValue}
+                    placeholder={placeholder}
+                    loading={loading}
+                    style={{ width: '100%' }}
+                    tokenSeparators={[',', ';', ' ']}
+                    filterOption={false} // We handle filtering manually
+                    showSearch={true}
+                    optionFilterProp="label"
+                    notFoundContent={
+                        loading ? (
+                            <div style={{ textAlign: 'center', padding: '8px' }}>
+                                <Spin size="small" /> Loading users...
+                            </div>
+                        ) : searchValue && searchValue.trim().length > 0 ? (
+                            filteredUsers.length === 0 && !EMAIL_REGEX.test(searchValue.trim()) ? (
+                                <div style={{ textAlign: 'center', padding: '8px', color: '#666' }}>
+                                    🔍 No users found for "{searchValue}"
+                                    <br />
+                                    <small>Try typing a valid email to add manually</small>
+                                </div>
+                            ) : null
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '8px', color: '#666' }}>
+                                👥 Type to search users
+                                <br />
+                                <small>Or enter email manually</small>
+                            </div>
+                        )
+                    }
+                    // 🔧 FIXED: Better dropdown rendering
+                    dropdownRender={(menu) => (
+                        <div>
+                            {escalationUsers.length > 0 && (
+                                <div style={{
+                                    padding: '8px 12px',
+                                    borderBottom: '1px solid #f0f0f0',
+                                    backgroundColor: '#fafafa',
+                                    fontSize: '12px',
+                                    color: '#666'
+                                }}>
+                                    👥 {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
+                                    {searchValue && ` for "${searchValue}"`} • ✍️ Manual entry supported
+                                </div>
+                            )}
+                            {menu}
+
+                            {/* 🆕 NEW: Quick Add Buttons for all designations in dropdown */}
+                            {formInstance && escalationUsers.length > 0 && !searchValue && (
+                                <div style={{
+                                    padding: '8px 12px',
+                                    borderTop: '1px solid #f0f0f0',
+                                    backgroundColor: '#f9f9f9'
+                                }}>
+                                    <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>
+                                        Quick Add by Designation:
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                        {[...new Set(escalationUsers.map(u => u.designation))].map(designation => {
+                                            const usersWithDesignation = escalationUsers.filter(u => u.designation === designation);
+                                            return (
+                                                <Button
+                                                    key={designation}
+                                                    size="small"
+                                                    type="link"
+                                                    onClick={() => handleQuickAdd(designation)}
+                                                    style={{
+                                                        padding: '2px 8px',
+                                                        height: 'auto',
+                                                        fontSize: '11px',
+                                                        lineHeight: '1.2'
+                                                    }}
+                                                >
+                                                    <Tag size="small" color="blue" style={{ margin: 0, fontSize: '10px' }}>
+                                                        {designation}
+                                                    </Tag>
+                                                    <span style={{ marginLeft: '4px' }}>+{usersWithDesignation.length}</span>
+                                                </Button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    options={options}
+                    tagRender={({ label, value, closable, onClose }) => {
+                        // Find user data for better tag display
+                        const user = escalationUsers.find(u => u.email === value);
+
+                        return (
+                            <Tag
+                                closable={closable}
+                                onClose={onClose}
+                                style={{
+                                    marginRight: 3,
+                                    backgroundColor: user ? '#e6f7ff' : '#f6ffed',
+                                    borderColor: user ? '#91d5ff' : '#b7eb8f',
+                                    color: user ? '#1890ff' : '#52c41a'
+                                }}
+                            >
+                                {user ? (
+                                    <span>
+                                        👤 {user.name}
+                                        <small style={{ marginLeft: '4px', opacity: 0.7 }}>
+                                            ({user.designation})
+                                        </small>
+                                    </span>
+                                ) : (
+                                    <span>✍️ {value}</span>
+                                )}
+                            </Tag>
+                        );
+                    }}
+                />
+            </div>
+        );
     };
 
-    return (
-        <div>
-            <Select
-                mode="tags"
-                value={value}
-                onChange={handleChange}
-                onSearch={handleSearch}
-                searchValue={searchValue}
-                placeholder={placeholder}
-                loading={loading}
-                style={{ width: '100%' }}
-                tokenSeparators={[',', ';', ' ']}
-                filterOption={false} // We handle filtering manually
-                showSearch={true}
-                optionFilterProp="label"
-                notFoundContent={
-                    loading ? (
-                        <div style={{ textAlign: 'center', padding: '8px' }}>
-                            <Spin size="small" /> Loading users...
-                        </div>
-                    ) : searchValue && searchValue.trim().length > 0 ? (
-                        filteredUsers.length === 0 && !EMAIL_REGEX.test(searchValue.trim()) ? (
-                            <div style={{ textAlign: 'center', padding: '8px', color: '#666' }}>
-                                🔍 No users found for "{searchValue}"
-                                <br />
-                                <small>Try typing a valid email to add manually</small>
-                            </div>
-                        ) : null
-                    ) : (
-                        <div style={{ textAlign: 'center', padding: '8px', color: '#666' }}>
-                            👥 Type to search users
-                            <br />
-                            <small>Or enter email manually</small>
-                        </div>
-                    )
-                }
-                // 🔧 FIXED: Better dropdown rendering
-                dropdownRender={(menu) => (
-                    <div>
-                        {escalationUsers.length > 0 && (
-                            <div style={{
-                                padding: '8px 12px',
-                                borderBottom: '1px solid #f0f0f0',
-                                backgroundColor: '#fafafa',
-                                fontSize: '12px',
-                                color: '#666'
-                            }}>
-                                👥 {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
-                                {searchValue && ` for "${searchValue}"`} • ✍️ Manual entry supported
-                            </div>
-                        )}
-                        {menu}
-                        
-                        {/* 🆕 NEW: Quick Add Buttons for all designations in dropdown */}
-                        {formInstance && escalationUsers.length > 0 && !searchValue && (
-                            <div style={{ 
-                                padding: '8px 12px', 
-                                borderTop: '1px solid #f0f0f0',
-                                backgroundColor: '#f9f9f9'
-                            }}>
-                                <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>
-                                    Quick Add by Designation:
-                                </div>
-                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                    {[...new Set(escalationUsers.map(u => u.designation))].map(designation => {
-                                        const usersWithDesignation = escalationUsers.filter(u => u.designation === designation);
-                                        return (
-                                            <Button
-                                                key={designation}
-                                                size="small"
-                                                type="link"
-                                                onClick={() => handleQuickAdd(designation)}
-                                                style={{ 
-                                                    padding: '2px 8px', 
-                                                    height: 'auto',
-                                                    fontSize: '11px',
-                                                    lineHeight: '1.2'
-                                                }}
-                                            >
-                                                <Tag size="small" color="blue" style={{ margin: 0, fontSize: '10px' }}>
-                                                    {designation}
-                                                </Tag>
-                                                <span style={{ marginLeft: '4px' }}>+{usersWithDesignation.length}</span>
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-                options={options}
-                tagRender={({ label, value, closable, onClose }) => {
-                    // Find user data for better tag display
-                    const user = escalationUsers.find(u => u.email === value);
 
-                    return (
-                        <Tag
-                            closable={closable}
-                            onClose={onClose}
-                            style={{
-                                marginRight: 3,
-                                backgroundColor: user ? '#e6f7ff' : '#f6ffed',
-                                borderColor: user ? '#91d5ff' : '#b7eb8f',
-                                color: user ? '#1890ff' : '#52c41a'
-                            }}
-                        >
-                            {user ? (
-                                <span>
-                                    👤 {user.name}
-                                    <small style={{ marginLeft: '4px', opacity: 0.7 }}>
-                                        ({user.designation})
-                                    </small>
-                                </span>
-                            ) : (
-                                <span>✍️ {value}</span>
-                            )}
-                        </Tag>
-                    );
-                }}
-            />
-        </div>
-    );
-};
+    useEffect(() => {
+        if (scheduleModalVisible || immediateEmailModalVisible) {
+            fetchEscalationUsers();
+        }
+    }, [scheduleModalVisible, immediateEmailModalVisible, fetchEscalationUsers]);
 
+    const formatDuration = (hours) => {
+        if (hours < 24) {
+            return `${Math.round(hours)}h`;
+        }
 
-useEffect(() => {
-    if (scheduleModalVisible || immediateEmailModalVisible) {
-        fetchEscalationUsers();
-    }
-}, [scheduleModalVisible, immediateEmailModalVisible, fetchEscalationUsers]);
+        const days = Math.floor(hours / 24);
+        const remainingHours = Math.round(hours % 24);
+
+        if (remainingHours === 0) {
+            return `${days}d`;
+        }
+
+        return `${days}d ${remainingHours}h`;
+    };
+    const determineRecordStatus = (record) => {
+        const now = dayjs();
+        let expectedReturn;
+
+        // Calculate expected return time
+        if (record.expected_return_datetime) {
+            expectedReturn = dayjs(record.expected_return_datetime);
+        } else if (record.date_to && record.time_in) {
+            const dateStr = record.date_to.includes('T') ?
+                record.date_to.split('T')[0] : record.date_to;
+            expectedReturn = dayjs(`${dateStr} ${record.time_in}`);
+        }
+
+        // If we can't calculate expected return, use original status
+        if (!expectedReturn || !expectedReturn.isValid()) {
+            return record.status;
+        }
+
+        // Check if pass is expired (past expected return time)
+        const isExpired = now.isAfter(expectedReturn);
+
+        // Status logic:
+        // 1. If student returned (has entry_time) -> "Completed" 
+        // 2. If expired and no entry -> "Expired"
+        // 3. Otherwise, keep original status
+        if (record.entry_time) {
+            return "Completed";
+        } else if (isExpired && record.status === 'Accepted') {
+            return "Expired";
+        }
+
+        return record.status;
+    };
+
+    const updatedViolationFilterOptions = [
+        <Option value="All">All Records</Option>,
+        <Option value="Violations">Any Violations</Option>,
+        <Option value="Clean">Clean Records</Option>,
+        <Option value="Expired" style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+            🕐 Expired Passes
+        </Option>,
+        <Option value="Completed" style={{ color: '#52c41a' }}>
+            ✅ Completed Returns
+        </Option>,
+
+        <Option disabled style={{ fontWeight: 'bold', color: '#1890ff' }}>
+            📋 LEAVE VIOLATIONS
+        </Option>,
+        <Option value="LeaveCritical" style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+            🚨 Leave Critical (Later Days)
+        </Option>,
+        <Option value="LeaveLate" style={{ color: '#ff7a00' }}>
+            ⏰ Leave Late (After 9PM)
+        </Option>,
+
+        <Option disabled style={{ fontWeight: 'bold', color: '#52c41a' }}>
+            🎯 OUTPASS VIOLATIONS
+        </Option>,
+        <Option value="OutpassCritical" style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+            🚨 Outpass Critical (24h+ & 9PM+)
+        </Option>,
+        <Option value="OutpassExtended" style={{ color: '#ff7a00' }}>
+            🔥 Outpass Extended (24h+ Over)
+        </Option>,
+        <Option value="OutpassDuration" style={{ color: '#faad14' }}>
+            ⏰ Outpass Duration Exceeded
+        </Option>,
+
+        <Option disabled style={{ fontWeight: 'bold', color: '#666' }}>
+            🔄 GENERAL
+        </Option>,
+        <Option value="AfterHours" style={{ color: '#722ed1' }}>
+            🌙 After Hours (All Types)
+        </Option>,
+        <Option value="Late">Regular Late</Option>,
+        <Option value="Overdue">Overdue</Option>
+    ];
     return (
         <div style={{ padding: '24px', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
             <div>
@@ -2594,69 +2759,69 @@ useEffect(() => {
                             </Col>
                         </Row>
 
-                   <Form.Item
-    label={
-        <span>
-            <UserOutlined style={{ marginRight: '4px', color: '#1890ff' }} />
-            Email Recipients (TO) <span style={{ color: 'red' }}>*</span>
-            <Tooltip title="Search from user directory or type emails manually">
-                <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
-            </Tooltip>
-        </span>
-    }
-    name="toEmails"
-    rules={[
-        { required: true, message: 'Please add at least one recipient' },
-        {
-            validator: (_, value) => {
-                if (!value || value.length === 0) {
-                    return Promise.reject('At least one email is required');
-                }
-                const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
-                if (invalidEmails.length > 0) {
-                    return Promise.reject(`Invalid email format: ${invalidEmails.join(', ')}`);
-                }
-                return Promise.resolve();
-            }
-        }
-    ]}
->
-    <EnhancedEmailSelect
-        loading={loadingUsers}
-        placeholder="🔍 Search users or type email@domain.com"
-        formInstance={immediateEmailForm}
-        fieldName="toEmails"
-    />
-</Form.Item>
+                        <Form.Item
+                            label={
+                                <span>
+                                    <UserOutlined style={{ marginRight: '4px', color: '#1890ff' }} />
+                                    Email Recipients (TO) <span style={{ color: 'red' }}>*</span>
+                                    <Tooltip title="Search from user directory or type emails manually">
+                                        <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
+                                    </Tooltip>
+                                </span>
+                            }
+                            name="toEmails"
+                            rules={[
+                                { required: true, message: 'Please add at least one recipient' },
+                                {
+                                    validator: (_, value) => {
+                                        if (!value || value.length === 0) {
+                                            return Promise.reject('At least one email is required');
+                                        }
+                                        const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
+                                        if (invalidEmails.length > 0) {
+                                            return Promise.reject(`Invalid email format: ${invalidEmails.join(', ')}`);
+                                        }
+                                        return Promise.resolve();
+                                    }
+                                }
+                            ]}
+                        >
+                            <EnhancedEmailSelect
+                                loading={loadingUsers}
+                                placeholder="🔍 Search users or type email@domain.com"
+                                formInstance={immediateEmailForm}
+                                fieldName="toEmails"
+                            />
+                        </Form.Item>
 
-                <Form.Item
-    label={
-        <span>
-            <UserOutlined style={{ marginRight: '4px', color: '#52c41a' }} />
-            CC Recipients (Optional)
-        </span>
-    }
-    name="ccEmails"
-    rules={[
-        {
-            validator: (_, value) => {
-                if (!value || value.length === 0) return Promise.resolve();
-                const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
-                if (invalidEmails.length > 0) {
-                    return Promise.reject(`Invalid CC email format: ${invalidEmails.join(', ')}`);
-                }
-                return Promise.resolve();
-            }
-        }
-    ]}
->
-    <EnhancedEmailSelect
-        loading={loadingUsers}
-        placeholder="🔍 Optional CC recipients"
-        formInstance={immediateEmailForm}
-        fieldName="ccEmails"
-    />
-</Form.Item>
+                        <Form.Item
+                            label={
+                                <span>
+                                    <UserOutlined style={{ marginRight: '4px', color: '#52c41a' }} />
+                                    CC Recipients (Optional)
+                                </span>
+                            }
+                            name="ccEmails"
+                            rules={[
+                                {
+                                    validator: (_, value) => {
+                                        if (!value || value.length === 0) return Promise.resolve();
+                                        const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
+                                        if (invalidEmails.length > 0) {
+                                            return Promise.reject(`Invalid CC email format: ${invalidEmails.join(', ')}`);
+                                        }
+                                        return Promise.resolve();
+                                    }
+                                }
+                            ]}
+                        >
+                            <EnhancedEmailSelect
+                                loading={loadingUsers}
+                                placeholder="🔍 Optional CC recipients"
+                                formInstance={immediateEmailForm}
+                                fieldName="ccEmails"
+                            />
+                        </Form.Item>
 
                         <Form.Item
                             label="Email Subject"
@@ -2762,113 +2927,113 @@ useEffect(() => {
 
                             <Row gutter={[16, 16]}>
                                 <Col span={24}>
-                                   <Form.Item
-    label={
-        <span>
-            <UserOutlined style={{ marginRight: '4px', color: '#1890ff' }} />
-            To Recipients <span style={{ color: 'red' }}>*</span>
-            <Tooltip title="Search by name, email, or designation from user directory, or type emails manually">
-                <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
-            </Tooltip>
-        </span>
-    }
-    name="toEmails"
-    rules={[
-        { required: true, message: 'Please add at least one recipient' },
-        {
-            validator: (_, value) => {
-                if (!value || value.length === 0) {
-                    return Promise.reject('At least one email is required');
-                }
-                const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
-                if (invalidEmails.length > 0) {
-                    return Promise.reject(`Invalid email format: ${invalidEmails.join(', ')}`);
-                }
-                return Promise.resolve();
-            }
-        }
-    ]}
->
-    <EnhancedEmailSelect
-        loading={loadingUsers}
-        placeholder="🔍 Search users or type email@domain.com"
-        formInstance={scheduleForm}
-        fieldName="toEmails"
-    />
-</Form.Item>
+                                    <Form.Item
+                                        label={
+                                            <span>
+                                                <UserOutlined style={{ marginRight: '4px', color: '#1890ff' }} />
+                                                To Recipients <span style={{ color: 'red' }}>*</span>
+                                                <Tooltip title="Search by name, email, or designation from user directory, or type emails manually">
+                                                    <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
+                                                </Tooltip>
+                                            </span>
+                                        }
+                                        name="toEmails"
+                                        rules={[
+                                            { required: true, message: 'Please add at least one recipient' },
+                                            {
+                                                validator: (_, value) => {
+                                                    if (!value || value.length === 0) {
+                                                        return Promise.reject('At least one email is required');
+                                                    }
+                                                    const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
+                                                    if (invalidEmails.length > 0) {
+                                                        return Promise.reject(`Invalid email format: ${invalidEmails.join(', ')}`);
+                                                    }
+                                                    return Promise.resolve();
+                                                }
+                                            }
+                                        ]}
+                                    >
+                                        <EnhancedEmailSelect
+                                            loading={loadingUsers}
+                                            placeholder="🔍 Search users or type email@domain.com"
+                                            formInstance={scheduleForm}
+                                            fieldName="toEmails"
+                                        />
+                                    </Form.Item>
                                 </Col>
 
                                 <Col span={12}>
                                     <Form.Item
-        label={
-            <span>
-                <UserOutlined style={{ marginRight: '4px', color: '#52c41a' }} />
-                CC Recipients (Optional)
-                <Tooltip title="Carbon copy - recipients will see other CC/TO addresses">
-                    <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
-                </Tooltip>
-            </span>
-        }
-        name="ccEmails"
-        rules={[
-            {
-                validator: (_, value) => {
-                    if (!value || value.length === 0) return Promise.resolve();
-                    const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
-                    if (invalidEmails.length > 0) {
-                        return Promise.reject(`Invalid CC email format: ${invalidEmails.join(', ')}`);
-                    }
-                    return Promise.resolve();
-                }
-            }
-        ]}
-    >
-        <EnhancedEmailSelect
-            loading={loadingUsers}
-            placeholder="🔍 Optional CC recipients"
-            formInstance={scheduleForm}
-            fieldName="ccEmails"
-        />
-    </Form.Item>
+                                        label={
+                                            <span>
+                                                <UserOutlined style={{ marginRight: '4px', color: '#52c41a' }} />
+                                                CC Recipients (Optional)
+                                                <Tooltip title="Carbon copy - recipients will see other CC/TO addresses">
+                                                    <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
+                                                </Tooltip>
+                                            </span>
+                                        }
+                                        name="ccEmails"
+                                        rules={[
+                                            {
+                                                validator: (_, value) => {
+                                                    if (!value || value.length === 0) return Promise.resolve();
+                                                    const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
+                                                    if (invalidEmails.length > 0) {
+                                                        return Promise.reject(`Invalid CC email format: ${invalidEmails.join(', ')}`);
+                                                    }
+                                                    return Promise.resolve();
+                                                }
+                                            }
+                                        ]}
+                                    >
+                                        <EnhancedEmailSelect
+                                            loading={loadingUsers}
+                                            placeholder="🔍 Optional CC recipients"
+                                            formInstance={scheduleForm}
+                                            fieldName="ccEmails"
+                                        />
+                                    </Form.Item>
                                 </Col>
 
                                 <Col span={12}>
-                                   <Form.Item
-        label={
-            <span>
-                <MailOutlined style={{ marginRight: '4px', color: '#722ed1' }} />
-                BCC Recipients (Optional)
-                <Tooltip title="Blind carbon copy - recipients won't see other BCC addresses">
-                    <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
-                </Tooltip>
-            </span>
-        }
-        name="bccEmails"
-        rules={[
-            {
-                validator: (_, value) => {
-                    if (!value || value.length === 0) return Promise.resolve();
-                    const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
-                    if (invalidEmails.length > 0) {
-                        return Promise.reject(`Invalid BCC email format: ${invalidEmails.join(', ')}`);
-                    }
-                    return Promise.resolve();
-                }
-            }
-        ]}
-    >
-        <EnhancedEmailSelect
-            loading={loadingUsers}
-            placeholder="🔍 Optional BCC recipients"
-            formInstance={scheduleForm}
-            fieldName="bccEmails"
-        />
-    </Form.Item>
+                                    <Form.Item
+                                        label={
+                                            <span>
+                                                <MailOutlined style={{ marginRight: '4px', color: '#722ed1' }} />
+                                                BCC Recipients (Optional)
+                                                <Tooltip title="Blind carbon copy - recipients won't see other BCC addresses">
+                                                    <InfoCircleOutlined style={{ marginLeft: '4px', color: '#666' }} />
+                                                </Tooltip>
+                                            </span>
+                                        }
+                                        name="bccEmails"
+                                        rules={[
+                                            {
+                                                validator: (_, value) => {
+                                                    if (!value || value.length === 0) return Promise.resolve();
+                                                    const invalidEmails = value.filter(email => !EMAIL_REGEX.test(email));
+                                                    if (invalidEmails.length > 0) {
+                                                        return Promise.reject(`Invalid BCC email format: ${invalidEmails.join(', ')}`);
+                                                    }
+                                                    return Promise.resolve();
+                                                }
+                                            }
+                                        ]}
+                                    >
+                                        <EnhancedEmailSelect
+                                            loading={loadingUsers}
+                                            placeholder="🔍 Optional BCC recipients"
+                                            formInstance={scheduleForm}
+                                            fieldName="bccEmails"
+                                        />
+                                    </Form.Item>
                                 </Col>
                             </Row>
 
                             {/* Quick Add Buttons for Common Users */}
-                          
+
                         </div>
 
                         {/* Schedule Configuration */}
@@ -3120,7 +3285,10 @@ useEffect(() => {
                     title={
                         <span>
                             <InfoCircleOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
-                            Schedule Details
+                            {selectedSchedule?.isEnhanced ? 'Enhanced Schedule Details' : 'Schedule Details'}
+                            {selectedSchedule?.isEnhanced && (
+                                <Badge count="Enhanced" style={{ backgroundColor: '#52c41a', marginLeft: '8px' }} />
+                            )}
                         </span>
                     }
                     open={scheduleDetailsVisible}
@@ -3147,19 +3315,42 @@ useEffect(() => {
                             </Button>
                         </Popconfirm>
                     ]}
-                    width={600}
+                    width={800}
                 >
                     {selectedSchedule && (
                         <div>
+                            {/* ✨ ENHANCED: Schedule Information with Google Calendar-style details */}
                             <Row gutter={16}>
                                 <Col span={12}>
-                                    <Card size="small" title="Schedule Information">
+                                    <Card size="small" title="Schedule Information" style={{ marginBottom: '16px' }}>
+                                        <div style={{ marginBottom: '8px' }}>
+                                            <Text strong>Type:</Text> {selectedSchedule.isEnhanced ?
+                                                <Tag color="green">Enhanced Google Calendar Style</Tag> :
+                                                <Tag>Standard Schedule</Tag>
+                                            }
+                                        </div>
                                         <div style={{ marginBottom: '8px' }}>
                                             <Text strong>Frequency:</Text> {selectedSchedule.frequency.charAt(0).toUpperCase() + selectedSchedule.frequency.slice(1)}
                                         </div>
+                                        {selectedSchedule.scheduleSummary && (
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong>Schedule:</Text>
+                                                <div style={{ marginTop: '4px', padding: '6px', backgroundColor: '#f0f9ff', borderRadius: '4px' }}>
+                                                    <Text style={{ color: '#1890ff', fontSize: '13px' }}>{selectedSchedule.scheduleSummary}</Text>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div style={{ marginBottom: '8px' }}>
                                             <Text strong>Delivery Time:</Text> {formatTime(selectedSchedule.delivery_time)}
                                         </div>
+                                        {selectedSchedule.next_run_time && (
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong>Next Run:</Text>
+                                                <Text style={{ color: '#52c41a', marginLeft: '8px' }}>
+                                                    {dayjs(selectedSchedule.next_run_time).format('MMM D, YYYY hh:mm A')}
+                                                </Text>
+                                            </div>
+                                        )}
                                         <div style={{ marginBottom: '8px' }}>
                                             <Text strong>Created:</Text> {dayjs(selectedSchedule.created_at).format('MMM D, YYYY HH:mm')}
                                         </div>
@@ -3167,9 +3358,51 @@ useEffect(() => {
                                             <Text strong>Status:</Text> <Tag color="success">Active</Tag>
                                         </div>
                                     </Card>
+
+                                    {/* ✨ ENHANCED: Show advanced scheduling rules if enhanced */}
+                                    {selectedSchedule.isEnhanced && selectedSchedule.enhancedScheduleRule && (
+                                        <Card size="small" title="Advanced Scheduling Rules">
+                                            {selectedSchedule.repeat_interval && (
+                                                <div style={{ marginBottom: '8px' }}>
+                                                    <Text strong>Interval:</Text> Every {selectedSchedule.repeat_interval} {selectedSchedule.frequency}(s)
+                                                </div>
+                                            )}
+                                            {selectedSchedule.weekdaysArray && selectedSchedule.weekdaysArray.length > 0 && (
+                                                <div style={{ marginBottom: '8px' }}>
+                                                    <Text strong>Weekdays:</Text>
+                                                    <div style={{ marginTop: '4px' }}>
+                                                        {selectedSchedule.weekdaysArray.map(dayKey => {
+                                                            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                                                            return (
+                                                                <Tag key={dayKey} size="small" color="blue">
+                                                                    {dayNames[dayKey]}
+                                                                </Tag>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {selectedSchedule.monthly_day && (
+                                                <div style={{ marginBottom: '8px' }}>
+                                                    <Text strong>Monthly Day:</Text> {selectedSchedule.monthly_day}
+                                                </div>
+                                            )}
+                                            {selectedSchedule.ends_type && (
+                                                <div style={{ marginBottom: '8px' }}>
+                                                    <Text strong>Ends:</Text>
+                                                    {selectedSchedule.ends_type === 'never' && ' Never'}
+                                                    {selectedSchedule.ends_type === 'on' && selectedSchedule.end_date &&
+                                                        ` On ${dayjs(selectedSchedule.end_date).format('MMM D, YYYY')}`}
+                                                    {selectedSchedule.ends_type === 'after' && selectedSchedule.max_occurrences &&
+                                                        ` After ${selectedSchedule.max_occurrences} occurrences`}
+                                                </div>
+                                            )}
+                                        </Card>
+                                    )}
                                 </Col>
+
                                 <Col span={12}>
-                                    <Card size="small" title="Delivery Stats">
+                                    <Card size="small" title="Delivery Stats" style={{ marginBottom: '16px' }}>
                                         <div style={{ marginBottom: '8px' }}>
                                             <Text strong>Total Sent:</Text> {selectedSchedule.total_sent || 0}
                                         </div>
@@ -3178,6 +3411,31 @@ useEffect(() => {
                                                 dayjs(selectedSchedule.last_sent).format('MMM D, YYYY HH:mm') :
                                                 'Not sent yet'}
                                         </div>
+                                        {/* ✨ ENHANCED: Show occurrence progress for enhanced schedules */}
+                                        {selectedSchedule.max_occurrences && (
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong>Progress:</Text>
+                                                <div style={{ marginTop: '4px' }}>
+                                                    <Text style={{ color: '#722ed1' }}>
+                                                        {selectedSchedule.current_occurrences || 0} / {selectedSchedule.max_occurrences} occurrences
+                                                    </Text>
+                                                    <div style={{
+                                                        width: '100%',
+                                                        height: '6px',
+                                                        backgroundColor: '#f0f0f0',
+                                                        borderRadius: '3px',
+                                                        marginTop: '4px'
+                                                    }}>
+                                                        <div style={{
+                                                            width: `${((selectedSchedule.current_occurrences || 0) / selectedSchedule.max_occurrences) * 100}%`,
+                                                            height: '100%',
+                                                            backgroundColor: '#722ed1',
+                                                            borderRadius: '3px'
+                                                        }}></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                         {selectedSchedule.error_message && (
                                             <div style={{ marginTop: '12px' }}>
                                                 <Alert
@@ -3189,13 +3447,8 @@ useEffect(() => {
                                             </div>
                                         )}
                                     </Card>
-                                </Col>
-                            </Row>
 
-                            <Divider />
-
-                            <Row gutter={16}>
-                                <Col span={12}>
+                                    {/* ✨ ENHANCED: Report Configuration with formats */}
                                     <Card size="small" title="Report Configuration">
                                         <div style={{ marginBottom: '8px' }}>
                                             <Text strong>Report Types:</Text>
@@ -3207,23 +3460,71 @@ useEffect(() => {
                                                 ))}
                                             </div>
                                         </div>
+                                        {selectedSchedule.formats && (
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong>Formats:</Text>
+                                                <div style={{ marginTop: '4px' }}>
+                                                    {selectedSchedule.formats.map(format => (
+                                                        <Tag key={format} size="small" color="cyan">
+                                                            {format.toUpperCase()}
+                                                        </Tag>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                         <div>
                                             <Text strong>Include Violations:</Text> {selectedSchedule.include_violations ? 'Yes' : 'No'}
                                         </div>
                                     </Card>
                                 </Col>
-                                <Col span={12}>
-                                    <Card size="small" title="Email Recipients">
+                            </Row>
+
+                            <Divider />
+
+                            {/* ✨ ENHANCED: Recipients with TO, CC, BCC breakdown */}
+                            <Row gutter={16}>
+                                <Col span={8}>
+                                    <Card size="small" title="TO Recipients">
                                         <div style={{ marginBottom: '8px' }}>
-                                            <Text strong>TO Recipients:</Text> {selectedSchedule.emails.length}
+                                            <Text strong>Count:</Text> {selectedSchedule.recipientsCount.to}
                                         </div>
-                                        <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                                        <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
                                             {selectedSchedule.emails.map((email, index) => (
-                                                <Tag key={index} style={{ margin: '2px' }}>{email}</Tag>
+                                                <Tag key={index} style={{ margin: '2px', fontSize: '11px' }}>{email}</Tag>
                                             ))}
                                         </div>
                                     </Card>
                                 </Col>
+
+                                {selectedSchedule.ccEmails.length > 0 && (
+                                    <Col span={8}>
+                                        <Card size="small" title="CC Recipients">
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong>Count:</Text> {selectedSchedule.recipientsCount.cc}
+                                            </div>
+                                            <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                                                {selectedSchedule.ccEmails.map((email, index) => (
+                                                    <Tag key={index} color="orange" style={{ margin: '2px', fontSize: '11px' }}>{email}</Tag>
+                                                ))}
+                                            </div>
+                                        </Card>
+                                    </Col>
+                                )}
+
+                                {selectedSchedule.bccEmails.length > 0 && (
+                                    <Col span={8}>
+                                        <Card size="small" title="BCC Recipients">
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong>Count:</Text> {selectedSchedule.recipientsCount.bcc}
+                                            </div>
+                                            <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                                                {selectedSchedule.bccEmails.map((email, index) => (
+                                                    <Tag key={index} color="purple" style={{ margin: '2px', fontSize: '11px' }}>{email}</Tag>
+                                                ))}
+                                            </div>
+                                        </Card>
+                                    </Col>
+                                )}
                             </Row>
 
                             {selectedSchedule.custom_message && (
