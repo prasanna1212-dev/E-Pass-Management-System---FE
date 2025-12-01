@@ -163,7 +163,7 @@ const ReportsSection = () => {
         try {
             console.log('📧 Fetching escalation users from API...');
 
-            const response = await fetch('https://172.30.6.12:5059/api/escalation-masters/getinfo');
+            const response = await fetch('https://smart.hostel.kggroup.com/api/escalation-masters/getinfo');
 
             if (!response.ok) {
                 throw new Error(`API Error: ${response.status}`);
