@@ -500,7 +500,7 @@ function SignUpModal({ onClose = { handleSignUpClose } }) {
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <div style={{ transform: "scale(0.85)", transformOrigin: "center" }}>
                   <ReCAPTCHA
-                    sitekey="6LfOaIYrAAAAAIg4f8Kjg5botn4BWlr8zy0viaMe"
+                    sitekey="6Lcldx0sAAAAAOJK4nyNkWmzam8QeWEHFPBiobnC"
                     onChange={(value) => {
                       onRecaptchaChange(value);
                     }}
