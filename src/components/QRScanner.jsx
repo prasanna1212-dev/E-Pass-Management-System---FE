@@ -352,7 +352,8 @@ const QRScanner = () => {
 
   const formatDateTime = (dateStr) => {
     if (!dateStr) return "N/A";
-    const date = new Date(dateStr);
+    const localStr = dateStr.endsWith("Z") ? dateStr.slice(0, -1) : dateStr;
+    const date = new Date(localStr);
     return date.toLocaleString("en-IN", {
       year: "numeric",
       month: "short",
