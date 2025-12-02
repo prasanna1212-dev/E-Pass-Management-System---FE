@@ -351,18 +351,22 @@ const QRScanner = () => {
   }, [studentImage]);
 
   const formatDateTime = (dateStr) => {
-    if (!dateStr) return "N/A";
-    const localStr = dateStr.endsWith("Z") ? dateStr.slice(0, -1) : dateStr;
-    const date = new Date(localStr);
-    return date.toLocaleString("en-IN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
+  if (!dateStr) return "N/A";
+ 
+  // Let JS parse whatever backend sends (UTC / IST / with or without Z)
+  const date = new Date(dateStr);
+ 
+  // Always display as IST, no matter what timezone the raw value is in
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
 
   const formatDateOnly = (dateStr) => {
     if (!dateStr) return "N/A";
