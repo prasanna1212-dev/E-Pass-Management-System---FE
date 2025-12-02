@@ -22,6 +22,7 @@ const DegreeMaster = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalSubmitting, setModalSubmitting] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [divisionFilter, setDivisionFilter] = useState(null);
   const [form] = Form.useForm();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -56,6 +57,12 @@ const DegreeMaster = () => {
       setLoading(false);
     }
   };
+
+  // 🔍 NEW: derive filtered list based on selected division
+  const filteredDegrees = React.useMemo(() => {
+    if (!divisionFilter) return degrees;
+    return degrees.filter((deg) => deg.division_id === divisionFilter);
+  }, [degrees, divisionFilter]);
 
   useEffect(() => {
     fetchDivisions();
@@ -199,19 +206,37 @@ const DegreeMaster = () => {
               Maintain degree records mapped with divisions.
             </p>
           </div>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={openAddModal}
-            className="masters-add-btn"
-          >
-            Add
-          </Button>
+
+          {/* 🔍 NEW: Division filter + Add button */}
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <Select
+              placeholder="Filter by division"
+              allowClear
+              style={{ minWidth: 200 }}
+              value={divisionFilter}
+              onChange={(value) => setDivisionFilter(value || null)}
+            >
+              {divisions.map((d) => (
+                <Option key={d.id} value={d.id}>
+                  {d.name}
+                </Option>
+              ))}
+            </Select>
+
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openAddModal}
+              className="masters-add-btn"
+            >
+              Add
+            </Button>
+          </div>
         </div>
 
         <Table
           rowKey="id"
-          dataSource={degrees}
+          dataSource={filteredDegrees} // 🔁 use filtered data
           columns={columns}
           loading={loading}
           pagination={{ pageSize: 10 }}
