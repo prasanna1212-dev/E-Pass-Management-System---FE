@@ -25,6 +25,7 @@ function DepartmentMaster() {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalSubmitting, setModalSubmitting] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [divisionFilter, setDivisionFilter] = useState(null);
   const [form] = Form.useForm();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -75,6 +76,14 @@ function DepartmentMaster() {
     fetchDegrees();
     fetchDepartments();
   }, []);
+
+  const filteredDepartments = React.useMemo(() => {
+    if (!divisionFilter) return departments;
+    return departments.filter(
+      (dept) => dept.division_id === divisionFilter
+    );
+  }, [departments, divisionFilter]);
+
 
   const handleDivisionChange = (divisionId) => {
     form.setFieldsValue({ degreeId: undefined });
@@ -235,19 +244,36 @@ function DepartmentMaster() {
               Maintain department records mapped with division and degree.
             </p>
           </div>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={openAddModal}
-            className="masters-add-btn"
-          >
-            Add
-          </Button>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <Select
+              placeholder="Filter by division"
+              allowClear
+              style={{ minWidth: 200 }}
+              value={divisionFilter}
+              onChange={(value) => setDivisionFilter(value || null)}
+            >
+              {divisions.map((d) => (
+                <Option key={d.id} value={d.id}>
+                  {d.name}
+                </Option>
+              ))}
+            </Select>
+
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openAddModal}
+              className="masters-add-btn"
+            >
+              Add
+            </Button>
+          </div>
         </div>
 
         <Table
           rowKey="id"
-          dataSource={departments}
+          dataSource={filteredDepartments}
           columns={columns}
           loading={loading}
           pagination={{ pageSize: 10 }}
