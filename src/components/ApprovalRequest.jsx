@@ -98,8 +98,20 @@ const ApprovalRequest = ({ theme, activeTab, searchQuery = "" }) => {
   const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
   const formatDateTime = (dateString) => {
-    const options = { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true };
-    return new Date(dateString).toLocaleDateString("en-US", options);
+  if (!dateString) return "N/A";
+
+  const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "N/A";
+
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata", // 🔐 lock to IST
+    });
   };
 
   return (
