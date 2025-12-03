@@ -350,15 +350,16 @@ const QRScanner = () => {
     };
   }, [studentImage]);
 
-  const formatDateTime = (dateStr) => {
+const formatDateTime = (dateStr) => {
   if (!dateStr) return "N/A";
- 
-  // Let JS parse whatever backend sends (UTC / IST / with or without Z)
-  const date = new Date(dateStr);
- 
-  // Always display as IST, no matter what timezone the raw value is in
+  
+  // Backend now sends IST times like "2025-12-02T12:39:27" (already in IST)
+  // Remove any timezone suffixes and treat as local IST
+  const cleanDateStr = dateStr.replace('Z', '').replace(/\+.*$/, '');
+  const date = new Date(cleanDateStr);
+  
+  // Format without timezone conversion since backend already sends IST
   return date.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -367,7 +368,6 @@ const QRScanner = () => {
     hour12: true,
   });
 };
-
   const formatDateOnly = (dateStr) => {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleDateString("en-IN", {
