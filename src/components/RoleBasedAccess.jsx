@@ -185,7 +185,7 @@ function RoleBasedAccess() {
       ),
     },
     {
-      title: "Domain UPN",
+      title: "Domain Name",
       dataIndex: "domain_join_upn",
       key: "domain_join_upn",
       render: (text) => (
