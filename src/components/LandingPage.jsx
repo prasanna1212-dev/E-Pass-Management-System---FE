@@ -11,6 +11,7 @@ import {
   FaUsers,
   FaQrcode,
   FaDatabase,
+  FaUserShield
 } from 'react-icons/fa';
 import kgislogo from "../assets/kgisl_logo.png";
 import Dashboard from './Dashboard';
@@ -20,6 +21,7 @@ import ApprovedUsers from './ApprovedUsers';
 import QRScanner from './QRScanner';
 import Masters from './Masters';
 import ReportsSection from './ReportsSection';
+import RoleBasedAccess from './RoleBasedAccess';
 import "../styles/LandingPage.css";
 
 // Logo component
@@ -38,6 +40,7 @@ const ALL_SIDEBAR_ITEMS = [
   { name: 'Approved Users', icon: <FaUsers />, content: <ApprovedUsers /> },
   { name: 'Masters', icon: <FaDatabase />, content: <Masters /> },
   { name: 'Reports', icon: <FaFileAlt />, content: <ReportsSection /> },
+  { name: 'Role Based Access', icon: <FaUserShield />, content: <RoleBasedAccess/> },
 ];
 
 // ✅ Role → allowed items
