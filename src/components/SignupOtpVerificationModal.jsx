@@ -24,7 +24,7 @@ function OtpVerificationModal({ onClose, signupData, onOtpSuccess }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [timer, setTimer] = useState(60);
+  const [timer, setTimer] = useState(180);
   const [resendLoading, setResendLoading] = useState(false);
 
  // countdown
@@ -133,7 +133,7 @@ return (
 
       <p className="otp-timer">
         {timer > 0
-          ? `OTP expires in: 00:${String(timer).padStart(2, "0")}`
+          ? `OTP expires in: ${String(Math.floor(timer / 60)).padStart(2, "0")}:${String(timer % 60).padStart(2, "0")}`
           : "OTP has expired"}
       </p>
 
