@@ -1637,7 +1637,9 @@ function OutPassRequest() {
             >
               Requested:&nbsp;
               <span style={{ fontWeight: "600" }}>
-                {new Date(selectedItem.created_at).toLocaleString("en-US", {
+                {new Date(
+                  String(selectedItem.created_at).replace("Z", "")
+                ).toLocaleString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
