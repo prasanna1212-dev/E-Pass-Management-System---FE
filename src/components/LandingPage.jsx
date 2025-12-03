@@ -58,7 +58,8 @@ const getSidebarItemsForRole = (role) => {
       (item) =>
         item.name !== 'Approval Request' &&
         item.name !== 'Approved Users' &&
-        item.name !== 'Reports'
+        item.name !== 'Reports' && 
+        item.name !== 'Role Based Access'
     );
   }
 
