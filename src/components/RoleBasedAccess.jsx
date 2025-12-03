@@ -32,6 +32,12 @@ const ROLE_CARDS = [
     pill: "High Priority",
     description:
       "Responsible for overall hostel monitoring, outpass approvals and emergency escalations.",
+    accessibleTabs: [
+      "Dashboard",
+      "Outpass Request",
+      "QR Verification",
+      "Masters"
+    ],
   },
   {
     key: "admin",
@@ -41,6 +47,16 @@ const ROLE_CARDS = [
     pill: "System Config",
     description:
       "Manages system configuration, master data, and has full access to dashboards and reports.",
+    accessibleTabs: [
+      "Dashboard",
+      "Outpass Request",
+      "QR Verification",
+      "Approval Request",
+      "Approved Users",
+      "Masters",
+      "Reports",
+      "Role Based Access",
+    ],
   },
   {
     key: "security",
@@ -50,6 +66,7 @@ const ROLE_CARDS = [
     pill: "Gate Control",
     description:
       "Handles entry/exit verification at gates, scans QR codes and enforces outpass validity.",
+    accessibleTabs: ["QR Verification"],
   },
 ];
 
@@ -314,11 +331,15 @@ function RoleBasedAccess() {
                     </div>
                   </div>
                   <p className="rba-role-description">{role.description}</p>
-                  <div className="rba-role-meta-row">
-                    <div className="rba-role-meta-dot" />
-                    <span className="rba-role-meta-text">
-                      Default permissions configured at system level.
-                    </span>
+                  <div className="role-card-tabs-section">
+                    <div className="role-card-tabs-label">Accessible Tabs</div>
+                    <div className="role-card-tabs">
+                      {role.accessibleTabs.map((tab) => (
+                        <span key={tab} className="role-card-tab-pill">
+                          {tab}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </Card>
               ))}
