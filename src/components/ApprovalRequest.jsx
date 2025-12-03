@@ -98,9 +98,12 @@ const ApprovalRequest = ({ theme, activeTab, searchQuery = "" }) => {
   const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
   const formatDateTime = (dateString) => {
-  if (!dateString) return "N/A";
+    if (!dateString) return "N/A";
 
-  const date = new Date(dateString);
+    // Remove Z → tell browser “this timestamp is already IST”
+    const clean = String(dateString).replace("Z", "");
+
+    const date = new Date(clean);
     if (Number.isNaN(date.getTime())) return "N/A";
 
     return date.toLocaleString("en-US", {
@@ -110,9 +113,10 @@ const ApprovalRequest = ({ theme, activeTab, searchQuery = "" }) => {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
-      timeZone: "Asia/Kolkata", // 🔐 lock to IST
+      // DO NOT add timeZone here — ensure browser uses system IST
     });
   };
+
 
   return (
     <div className={`approval-request-container ${theme}`}>
