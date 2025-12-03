@@ -60,7 +60,11 @@ const ApprovedUser = ({ theme, activeTab, searchQuery = "" }) => {
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
 
-    const date = new Date(dateString);
+    // If backend sent something like "2025-12-03T11:40:25.376Z",
+    // drop the "Z" so JS treats it as local time (IST on your machine)
+    const clean = String(dateString).replace("Z", "");
+
+    const date = new Date(clean);
     if (Number.isNaN(date.getTime())) return "N/A";
 
     return date.toLocaleString("en-US", {
@@ -70,7 +74,7 @@ const ApprovedUser = ({ theme, activeTab, searchQuery = "" }) => {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
-      timeZone: "Asia/Kolkata", // lock to IST
+      // no explicit timeZone here – we want browser local (IST for you)
     });
   };
 
