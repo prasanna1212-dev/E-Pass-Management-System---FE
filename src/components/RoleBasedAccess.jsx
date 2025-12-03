@@ -36,7 +36,7 @@ const ROLE_CARDS = [
       "Dashboard",
       "Outpass Request",
       "QR Verification",
-      "Masters"
+      "Masters",
     ],
   },
   {
