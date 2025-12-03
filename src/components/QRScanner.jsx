@@ -24,7 +24,7 @@ const QRScanner = () => {
   const [outpassData, setOutpassData] = useState(null);
   const [currentTime, setCurrentTime] = useState("");
   const [studentImage, setStudentImage] = useState(null);
-  
+
   // 🚀 NEW: Entry/Exit Modal States
   const [exitModalVisible, setExitModalVisible] = useState(false);
   const [entryModalVisible, setEntryModalVisible] = useState(false);
@@ -35,20 +35,20 @@ const QRScanner = () => {
 
   // 🕒 Live clock updater
   useEffect(() => {
-  const updateTime = () => {
-  const now = new Date();
-  const formatted = now.toLocaleString("en-US", {
-    year: "numeric", 
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit", 
-    second: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Kolkata",
-  });
-  setCurrentTime(formatted);
-};
+    const updateTime = () => {
+      const now = new Date();
+      const formatted = now.toLocaleString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Kolkata",
+      });
+      setCurrentTime(formatted);
+    };
 
     updateTime();
     const timer = setInterval(updateTime, 1000);
@@ -100,7 +100,7 @@ const QRScanner = () => {
 
     const now = new Date();
     const validDate = new Date(validUntil);
-    
+
     // Check if the valid date is today
     const isToday = (
       now.getFullYear() === validDate.getFullYear() &&
@@ -112,11 +112,11 @@ const QRScanner = () => {
     if (isToday && originalStatus === "Expired") {
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
-      
+
       // Convert current time to minutes for easier comparison
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       const ninePM = 21 * 60; // 9 PM in minutes (21:00)
-      
+
       // If current time is before 9 PM, allow as valid
       if (currentTimeInMinutes < ninePM) {
         return "Valid";
@@ -148,7 +148,7 @@ const QRScanner = () => {
 
       // Apply enhanced status logic
       const enhancedStatus = determineOutpassStatus(res.data.status, res.data.valid_until);
-      
+
       const enhancedData = {
         ...res.data,
         status: enhancedStatus
@@ -196,7 +196,7 @@ const QRScanner = () => {
   const handleEntryExitLogic = (data, scannedIdentifier) => {
     const scanCount = data.details?.scan_count || 0;
     const requestType = data.request_type; // 'outpass' or 'leave'
-    
+
     // 🚀 NEW: Determine the correct identifier based on request type
     let identifier;
     if (requestType === 'outpass') {
@@ -207,7 +207,7 @@ const QRScanner = () => {
       // Fallback to scanned identifier
       identifier = scannedIdentifier;
     }
-    
+
     if (scanCount === 0) {
       // First scan - Student wants to exit campus
       setPendingAction({
@@ -241,7 +241,7 @@ const QRScanner = () => {
 
     try {
       setActionLoading(true);
-      
+
       const response = await axios.post(
         `${API_BASE_URL}/outpass-route/outpass/confirm-exit/${pendingAction.identifier}`,
         {
@@ -255,7 +255,7 @@ const QRScanner = () => {
         setExitModalVisible(false);
         setPendingAction(null);
         setOutpassData(null); // Clear current outpass data
-        
+
         // DON'T auto-refresh - wait for next scan
       } else {
         toast.error(response.data.message || "Failed to confirm exit");
@@ -279,7 +279,7 @@ const QRScanner = () => {
 
     try {
       setActionLoading(true);
-      
+
       const response = await axios.post(
         `${API_BASE_URL}/outpass-route/outpass/confirm-entry/${pendingAction.identifier}`,
         {
@@ -293,7 +293,7 @@ const QRScanner = () => {
         setEntryModalVisible(false);
         setPendingAction(null);
         setOutpassData(null); // Clear current outpass data
-        
+
         // DON'T auto-refresh - ready for next scan
       } else {
         toast.error(response.data.message || "Failed to confirm entry");
@@ -316,7 +316,7 @@ const QRScanner = () => {
     setExitModalVisible(false);
     setEntryModalVisible(false);
     setPendingAction(null);
-    
+
     // Clear input and refocus
     setHostelId("");
     if (inputRef.current) {
@@ -351,39 +351,41 @@ const QRScanner = () => {
     };
   }, [studentImage]);
 
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return "N/A";
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return "N/A";
+
+    // Use the same method as your other components
+    return new Date(
+      String(dateStr).replace("Z", "")
+    ).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    });
+  };
   
-  // Use the same method as your other components
-  return new Date(
-    String(dateStr).replace("Z", "")
-  ).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Kolkata",
-  });
-};
-const formatCampusDateTime = (dateStr) => {
-  if (!dateStr) return "N/A";
-  
-  return new Date(
-    String(dateStr).replace("Z", "")
-  ).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Kolkata",
-  });
-};
+  const formatCampusDateTime = (dateStr) => {
+    if (!dateStr) return "N/A";
+
+    const date = new Date(dateStr); // keep the Z / offset as-is
+
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata", // force display in IST
+    });
+  };
+
   const formatDateOnly = (dateStr) => {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleDateString("en-IN", {
@@ -514,7 +516,7 @@ const formatCampusDateTime = (dateStr) => {
               <p>
                 <strong>Valid Until:</strong> {formatDateTime(outpassData.valid_until)}
               </p>
-              
+
               {/* 🚀 NEW: Show Exit/Entry Times if available */}
               {outpassData.details?.exit_time && (
                 <p>
@@ -526,7 +528,7 @@ const formatCampusDateTime = (dateStr) => {
                   <strong>Campus Entry:</strong> {formatCampusDateTime(outpassData.details.entry_time)}
                 </p>
               )}
-              
+
               {/* 🚀 NEW: Show request type badge */}
               <div style={{ marginTop: '8px' }}>
                 <span style={{
@@ -615,11 +617,11 @@ const formatCampusDateTime = (dateStr) => {
       >
         {pendingAction && (
           <div>
-            <div style={{ 
-              backgroundColor: '#e6f7ff', 
-              border: '1px solid #91d5ff', 
-              borderRadius: '6px', 
-              padding: '16px', 
+            <div style={{
+              backgroundColor: '#e6f7ff',
+              border: '1px solid #91d5ff',
+              borderRadius: '6px',
+              padding: '16px',
               marginBottom: '16px',
               textAlign: 'center'
             }}>
@@ -654,9 +656,9 @@ const formatCampusDateTime = (dateStr) => {
               </Text>
             </div>
 
-            <div style={{ 
-              backgroundColor: '#f6f6f6', 
-              padding: '12px', 
+            <div style={{
+              backgroundColor: '#f6f6f6',
+              padding: '12px',
               borderRadius: '4px',
               textAlign: 'center'
             }}>
@@ -690,11 +692,11 @@ const formatCampusDateTime = (dateStr) => {
       >
         {pendingAction && (
           <div>
-            <div style={{ 
-              backgroundColor: '#f6ffed', 
-              border: '1px solid #b7eb8f', 
-              borderRadius: '6px', 
-              padding: '16px', 
+            <div style={{
+              backgroundColor: '#f6ffed',
+              border: '1px solid #b7eb8f',
+              borderRadius: '6px',
+              padding: '16px',
               marginBottom: '16px',
               textAlign: 'center'
             }}>
@@ -729,9 +731,9 @@ const formatCampusDateTime = (dateStr) => {
               </Text>
             </div>
 
-            <div style={{ 
-              backgroundColor: '#f6f6f6', 
-              padding: '12px', 
+            <div style={{
+              backgroundColor: '#f6f6f6',
+              padding: '12px',
               borderRadius: '4px',
               textAlign: 'center'
             }}>
