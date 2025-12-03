@@ -372,7 +372,8 @@ const QRScanner = () => {
   const formatCampusDateTime = (dateStr) => {
     if (!dateStr) return "N/A";
 
-    const date = new Date(dateStr); // keep the Z / offset as-is
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "N/A";
 
     return date.toLocaleString("en-US", {
       month: "short",
@@ -382,7 +383,7 @@ const QRScanner = () => {
       minute: "2-digit",
       second: "2-digit",
       hour12: true,
-      timeZone: "Asia/Kolkata", // force display in IST
+      timeZone: "Asia/Kolkata",
     });
   };
 
