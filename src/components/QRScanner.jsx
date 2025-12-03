@@ -35,19 +35,20 @@ const QRScanner = () => {
 
   // 🕒 Live clock updater
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const formatted = now.toLocaleString("en-IN", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
-      setCurrentTime(formatted);
-    };
+  const updateTime = () => {
+  const now = new Date();
+  const formatted = now.toLocaleString("en-US", {
+    year: "numeric", 
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit", 
+    second: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+  setCurrentTime(formatted);
+};
 
     updateTime();
     const timer = setInterval(updateTime, 1000);
@@ -353,19 +354,34 @@ const QRScanner = () => {
 const formatDateTime = (dateStr) => {
   if (!dateStr) return "N/A";
   
-  // Backend now sends IST times like "2025-12-02T12:39:27" (already in IST)
-  // Remove any timezone suffixes and treat as local IST
-  const cleanDateStr = dateStr.replace('Z', '').replace(/\+.*$/, '');
-  const date = new Date(cleanDateStr);
-  
-  // Format without timezone conversion since backend already sends IST
-  return date.toLocaleString("en-IN", {
-    year: "numeric",
+  // Use the same method as your other components
+  return new Date(
+    String(dateStr).replace("Z", "")
+  ).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+};
+const formatCampusDateTime = (dateStr) => {
+  if (!dateStr) return "N/A";
+  
+  return new Date(
+    String(dateStr).replace("Z", "")
+  ).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
   });
 };
   const formatDateOnly = (dateStr) => {
@@ -502,12 +518,12 @@ const formatDateTime = (dateStr) => {
               {/* 🚀 NEW: Show Exit/Entry Times if available */}
               {outpassData.details?.exit_time && (
                 <p>
-                  <strong>Campus Exit:</strong> {formatDateTime(outpassData.details.exit_time)}
+                  <strong>Campus Exit:</strong>{formatCampusDateTime(outpassData.details.exit_time)}
                 </p>
               )}
               {outpassData.details?.entry_time && (
                 <p>
-                  <strong>Campus Entry:</strong> {formatDateTime(outpassData.details.entry_time)}
+                  <strong>Campus Entry:</strong> {formatCampusDateTime(outpassData.details.entry_time)}
                 </p>
               )}
               
