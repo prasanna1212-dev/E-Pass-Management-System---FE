@@ -35,7 +35,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 const { Text } = Typography;
 
-const POLLING_INTERVAL = 120000;
+const POLLING_INTERVAL = 300000;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
