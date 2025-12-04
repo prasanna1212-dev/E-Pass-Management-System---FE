@@ -755,7 +755,7 @@ function OutPassRequest() {
           <div>{text}</div>
           {record.permission && (
             <Tag
-              color={record.permission === "leave" ? "blue" : "green"}
+              color={record.permission === "leave" ? "red" : "orange"}
               size="small"
               icon={
                 record.permission === "leave" ? (
@@ -1340,7 +1340,7 @@ function OutPassRequest() {
                   {selectedItem.permission && (
                     <Tag
                       color={
-                        selectedItem.permission === "leave" ? "blue" : "green"
+                        selectedItem.permission === "leave" ? "red" : "orange"
                       }
                       style={{ marginLeft: 5 }}
                     >
