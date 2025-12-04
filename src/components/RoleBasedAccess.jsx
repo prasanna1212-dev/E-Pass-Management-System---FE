@@ -35,7 +35,7 @@ const ROLE_CARDS = [
     accessibleTabs: [
       "Dashboard",
       "Outpass Request",
-      "QR Verification",
+      "Reports",
       "Masters",
     ],
   },
