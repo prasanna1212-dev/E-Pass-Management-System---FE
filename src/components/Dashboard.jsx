@@ -40,6 +40,9 @@ function Dashboard() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // NEW: which global view is active: "ALL" | "OUTPASS" | "LEAVE"
+  const [viewMode, setViewMode] = useState("ALL");
+
   // which chart is in "enhanced" view
   const [expandedChart, setExpandedChart] = useState(null);
   // expandedChart = { panelKey: "outpass" | "leave", chartKey: "status" | "hostel" | "timeline" | "duration" | "institution" | "purposes" }
@@ -767,28 +770,84 @@ function Dashboard() {
         <div className="dashboard-container-loading">Loading analytics…</div>
       ) : (
         <>
-          <div
-            className="dashboard-split-layout"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "24px",
-              alignItems: "flex-start",
-            }}
-          >
-            {renderPanel(
-              "outpass",
-              "Outpass Dashboard",
-              "Analytics for all outpass requests",
-              outpassStats
-            )}
-            {renderPanel(
-              "leave",
-              "Leave Dashboard",
-              "Analytics for all leave requests",
-              leaveStats
-            )}
+          {/* 🔘 GLOBAL VIEW SWITCH – top left */}
+          <div className="dashboard-view-toggle">
+            <button
+              type="button"
+              className={`dashboard-view-toggle-btn ${
+                viewMode === "ALL" ? "active" : ""
+              }`}
+              onClick={() => setViewMode("ALL")}
+            >
+              ALL
+            </button>
+            <button
+              type="button"
+              className={`dashboard-view-toggle-btn ${
+                viewMode === "OUTPASS" ? "active" : ""
+              }`}
+              onClick={() => setViewMode("OUTPASS")}
+            >
+              OUTING
+            </button>
+            <button
+              type="button"
+              className={`dashboard-view-toggle-btn ${
+                viewMode === "LEAVE" ? "active" : ""
+              }`}
+              onClick={() => setViewMode("LEAVE")}
+            >
+              LEAVE
+            </button>
           </div>
+
+          {/* layout changes based on viewMode */}
+          {viewMode === "ALL" && (
+            <div
+              className="dashboard-split-layout"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "24px",
+                alignItems: "flex-start",
+              }}
+            >
+              {renderPanel(
+                "outpass",
+                "Outpass Dashboard",
+                "Analytics for all outpass requests",
+                outpassStats
+              )}
+              {renderPanel(
+                "leave",
+                "Leave Dashboard",
+                "Analytics for all leave requests",
+                leaveStats
+              )}
+            </div>
+          )}
+
+          {viewMode === "OUTPASS" && (
+            <div className="dashboard-single-layout">
+              {renderPanel(
+                "outpass",
+                "Outpass Dashboard",
+                "Analytics for all outpass requests",
+                outpassStats
+              )}
+            </div>
+          )}
+
+          {viewMode === "LEAVE" && (
+            <div className="dashboard-single-layout">
+              {renderPanel(
+                "leave",
+                "Leave Dashboard",
+                "Analytics for all leave requests",
+                leaveStats
+              )}
+            </div>
+          )}
 
           {renderExpandedModal()}
         </>
