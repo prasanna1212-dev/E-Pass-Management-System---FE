@@ -1242,7 +1242,7 @@ const ReportsSection = () => {
                             key: "type",
                             width: 80,
                             render: (_, record) => (
-                                <Tag color={record.permission === 'leave' ? 'blue' : 'green'}>
+                                <Tag color={record.permission === 'leave' ? 'red' : 'orange'}>
                                     {record.permission === 'leave' ? 'Leave' : 'Outpass'}
                                 </Tag>
                             )
@@ -2650,7 +2650,7 @@ const ReportsSection = () => {
                     {record.permission && (
                         <Tag
                             size="small"
-                            color={record.permission === 'leave' ? 'blue' : 'green'}
+                            color={record.permission === 'leave' ? 'red' : 'orange'}
                             icon={record.permission === 'leave' ? <FileTextOutlined /> : <UserOutlined />}
                         >
                             {record.permission === 'leave' ? 'Leave' : 'Outpass'}
