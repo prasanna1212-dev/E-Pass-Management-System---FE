@@ -14,6 +14,7 @@ import {
   Image,
   Form,
   Typography,
+  Spin,
 } from "antd";
 import {
   SearchOutlined,
@@ -26,6 +27,7 @@ import {
   UserOutlined,
   FileTextOutlined,
   EditOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons";
 import "../styles/OutPassRequest.css";
 import toast from "react-hot-toast";
@@ -35,8 +37,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 const { Text } = Typography;
 
-const POLLING_INTERVAL = 300000;
-
+const POLLING_INTERVAL = 120000;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 function OutPassRequest() {
@@ -46,6 +47,10 @@ function OutPassRequest() {
   const [dateRange, setDateRange] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // 🆕 NEW: State for detailed item with images
+  const [detailedItem, setDetailedItem] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState("All");
@@ -61,7 +66,7 @@ function OutPassRequest() {
   const [rejectionForm] = Form.useForm();
   const [rejectionLoading, setRejectionLoading] = useState(false);
 
-  // Edit Approval Modal State (from component 2)
+  // Edit Approval Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
   const [editedCheckOut, setEditedCheckOut] = useState(null);
@@ -69,17 +74,11 @@ function OutPassRequest() {
   const [editedRemarks, setEditedRemarks] = useState("");
   const [editForm] = Form.useForm();
 
-  // Unified fetch function that handles both API endpoints
+  // 🚀 OPTIMIZED: Fast fetch without images
   const fetchOutpassData = useCallback(async () => {
     setLoading(true);
     try {
-      // Try the unified endpoint first (from component 1)
-      let res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
-
-      // Fallback to old endpoint if needed (from component 2)
-      if (!res.ok) {
-        res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
-      }
+      const res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
 
       if (!res.ok) throw new Error("Failed to fetch data");
 
@@ -124,7 +123,7 @@ function OutPassRequest() {
         temp = temp.filter((item) => item.status === statusFilter);
       }
 
-      // 4. Permission Filter (if available)
+      // 4. Permission Filter
       if (
         permissionFilter &&
         permissionFilter !== "All" &&
@@ -159,6 +158,43 @@ function OutPassRequest() {
     currentPage,
     pageSize,
   ]);
+
+  // 🆕 NEW: Fetch detailed item with images on demand
+  const fetchDetailedItem = useCallback(async (item) => {
+    setDetailLoading(true);
+    try {
+      const requestType = item.is_leave_request || item.permission === 'leave' ? 'leave' : 'outpass';
+      const res = await fetch(
+        `${API_BASE_URL}/outpass-route/getinfo/outpass/${item.id}/details?type=${requestType}`
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch detailed item");
+      }
+
+      const detailedData = await res.json();
+      setDetailedItem(detailedData);
+    } catch (err) {
+      console.error("Error fetching detailed item:", err);
+      notification.error({
+        message: "Error Loading Details",
+        description: "Failed to load detailed information with images.",
+      });
+      // Fallback: use basic item without images
+      setDetailedItem(item);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  // 🚀 UPDATED: Enhanced view handler with image loading
+  const handleViewItem = async (item) => {
+    setSelectedItem(item);
+    setDetailedItem(null); // Clear previous detailed data
+    
+    // Immediately show modal with basic info, then load images
+    await fetchDetailedItem(item);
+  };
 
   useEffect(() => {
     fetchOutpassData();
@@ -278,7 +314,6 @@ function OutPassRequest() {
     );
 
     try {
-      // Try new API structure first, then fallback
       let response = await fetch(
         `${API_BASE_URL}/outpass-route/outpass/approve-renewal/${id}`,
         {
@@ -292,22 +327,6 @@ function OutPassRequest() {
           }),
         }
       );
-
-      if (!response.ok) {
-        response = await fetch(
-          `${API_BASE_URL}/outpass-route/outpass/approve-renewal/${id}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              date_to: formattedDate,
-              time_in: formattedTime,
-              reason:
-                record.renewal_reason || "Renewal Approved by Staff/Warden.",
-            }),
-          }
-        );
-      }
 
       const result = await response.json();
 
@@ -357,15 +376,6 @@ function OutPassRequest() {
         }
       );
 
-      if (!response.ok) {
-        response = await fetch(
-          `${API_BASE_URL}/outpass-route/outpass/reject-renewal/${id}`,
-          {
-            method: "POST",
-          }
-        );
-      }
-
       const result = await response.json();
 
       if (response.ok) {
@@ -411,14 +421,6 @@ function OutPassRequest() {
 
     try {
       let response = await fetch(endpoint, { method: "POST" });
-
-      // Fallback to old API structure if needed
-      if (!response.ok) {
-        endpoint = isLeaveRequest
-          ? `${API_BASE_URL}/outpass-route/leave/accept/${record.id}`
-          : `${API_BASE_URL}/outpass-route/outpass/accept/${record.id}`;
-        response = await fetch(endpoint, { method: "POST" });
-      }
 
       const result = await response.json();
 
@@ -468,8 +470,8 @@ function OutPassRequest() {
 
       try {
         let endpoint = isLeaveRequest
-          ? `${API_BASE_URL}/api/outpass-route/leave/accept/${editRecord.id}`
-          : `${API_BASE_URL}/api/outpass-route/outpass/accept/${editRecord.id}`;
+          ? `${API_BASE_URL}/outpass-route/leave/accept/${editRecord.id}`
+          : `${API_BASE_URL}/outpass-route/outpass/accept/${editRecord.id}`;
 
         let response = await fetch(endpoint, {
           method: "POST",
@@ -482,25 +484,6 @@ function OutPassRequest() {
             remarks,
           }),
         });
-
-        // fallback to non /api routes
-        if (!response.ok) {
-          endpoint = isLeaveRequest
-            ? `${API_BASE_URL}/outpass-route/leave/accept/${editRecord.id}`
-            : `${API_BASE_URL}/outpass-route/outpass/accept/${editRecord.id}`;
-
-          response = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              updated_date_from: checkout.format("YYYY-MM-DD"),
-              updated_time_out: checkout.format("HH:mm:ss"),
-              updated_date_to: checkin.format("YYYY-MM-DD"),
-              updated_time_in: checkin.format("HH:mm:ss"),
-              remarks,
-            }),
-          });
-        }
 
         const resData = await response.json();
         toast.dismiss(loadingToastId);
@@ -528,7 +511,6 @@ function OutPassRequest() {
         });
       }
     } catch (validationError) {
-      // antd form already shows errors under fields, no need for toast
       return;
     }
   };
@@ -564,21 +546,6 @@ function OutPassRequest() {
           reason: values.reason.trim() || "No specific reason provided.",
         }),
       });
-
-      // Fallback to old API
-      if (!response.ok) {
-        endpoint = isLeaveRequest
-          ? `${API_BASE_URL}/outpass-route/leave/reject/${rejectionTarget.id}`
-          : `${API_BASE_URL}/outpass-route/outpass/reject/${rejectionTarget.id}`;
-
-        response = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reason: values.reason.trim() || "No specific reason provided.",
-          }),
-        });
-      }
 
       const result = await response.json();
 
@@ -621,10 +588,7 @@ function OutPassRequest() {
   const buildDateTime = (dateStr, timeStr) => {
     if (!dateStr || !timeStr) return null;
 
-    // normalize to local date (handles ISO / timezone)
     const dateOnly = dayjs(dateStr).format("YYYY-MM-DD");
-
-    // support HH:mm or HH:mm:ss
     const timeFormat = timeStr.length === 5 ? "HH:mm" : "HH:mm:ss";
 
     return dayjs(`${dateOnly} ${timeStr}`, `YYYY-MM-DD ${timeFormat}`);
@@ -656,6 +620,7 @@ function OutPassRequest() {
     return `${days}D / ${hours}H / ${minutes}M`;
   };
 
+  // 🚀 OPTIMIZED: Helper functions for images - now work with detailedItem
   const getStudentImageSrc = (item) => {
     if (!item || !item.student_image) return null;
 
@@ -676,19 +641,16 @@ function OutPassRequest() {
     const mime = item.letter_mimetype || "image/jpeg";
     const raw = item.leave_letter;
 
-    // 1) already a full data URL
     if (typeof raw === "string" && raw.startsWith("data:")) {
       return raw;
     }
 
-    // 2) already base64 string (no "data:" prefix)
     if (typeof raw === "string" && !raw.startsWith("\\x")) {
       return `data:${mime};base64,${raw}`;
     }
 
-    // 3) hex string like "\xFFD8..."  -> convert hex -> base64
     if (typeof raw === "string" && raw.startsWith("\\x")) {
-      const hex = raw.slice(2); // drop "\x"
+      const hex = raw.slice(2);
       let binary = "";
       for (let i = 0; i < hex.length; i += 2) {
         binary += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
@@ -697,7 +659,6 @@ function OutPassRequest() {
       return `data:${mime};base64,${base64}`;
     }
 
-    // 4) Buffer-like object { type: 'Buffer', data: [...] }
     if (raw && typeof raw === "object" && Array.isArray(raw.data)) {
       const uint8 = new Uint8Array(raw.data);
       let binary = "";
@@ -708,7 +669,6 @@ function OutPassRequest() {
       return `data:${mime};base64,${base64}`;
     }
 
-    // if nothing matched, bail
     return null;
   };
 
@@ -811,17 +771,6 @@ function OutPassRequest() {
         </div>
       ),
     },
-    // {
-    //     title: "Mail ID",
-    //     key: "Mail ID",
-    //     render: (_, record) => (
-    //         <div>
-    //             <div style={{ fontSize: '11px', color: '#666' }}>
-    //                 {record.mail_id || 'N/A'}
-    //             </div>
-    //         </div>
-    //     )
-    // },
     {
       title: "From",
       dataIndex: "date_from",
@@ -885,7 +834,7 @@ function OutPassRequest() {
           <Button
             icon={<EyeOutlined />}
             type="link"
-            onClick={() => setSelectedItem(record)}
+            onClick={() => handleViewItem(record)}
           >
             View
           </Button>
@@ -912,7 +861,6 @@ function OutPassRequest() {
             </>
           ) : record.status === "Pending" ? (
             <>
-              {/* 🚀 UPDATED: Both Leave and Outpass open modal for time review */}
               <Button
                 type="primary"
                 icon={<CheckCircleOutlined />}
@@ -929,13 +877,11 @@ function OutPassRequest() {
                   );
                   const now = dayjs();
 
-                  // clamp checkout to now if original is in the past
                   const safeOut =
                     originalOut && originalOut.isAfter(now)
                       ? originalOut
                       : now.add(5, "minute");
 
-                  // clamp check-in to be after checkout
                   let safeIn =
                     originalIn && originalIn.isAfter(safeOut)
                       ? originalIn
@@ -945,7 +891,6 @@ function OutPassRequest() {
                   setEditedCheckIn(safeIn);
                   setEditedRemarks("");
 
-                  // initialise form fields
                   editForm.setFieldsValue({
                     checkout: safeOut,
                     checkin: safeIn,
@@ -1021,7 +966,7 @@ function OutPassRequest() {
           <Option value="Completed">Completed</Option>
         </Select>
 
-        {/* Permission Filter - only show if data has permission field */}
+        {/* Permission Filter */}
         {hasPermissionData && (
           <Select
             value={permissionFilter}
@@ -1290,14 +1235,17 @@ function OutPassRequest() {
         </Form>
       </Modal>
 
-      {/* View Details Modal */}
+      {/* 🚀 UPDATED: View Details Modal with loading states and optimized image handling */}
       <Modal
         visible={!!selectedItem}
         title={`${
           selectedItem?.permission === "leave" ? "Leave" : "Outpass"
         } Request Details`}
         centered
-        onCancel={() => setSelectedItem(null)}
+        onCancel={() => {
+          setSelectedItem(null);
+          setDetailedItem(null);
+        }}
         footer={null}
         width={800}
       >
@@ -1352,62 +1300,29 @@ function OutPassRequest() {
                 </h3>
               </div>
 
-              {(getStudentImageSrc(selectedItem) ||
-                (selectedItem.permission === "leave" &&
-                  getLeaveLetterSrc(selectedItem))) && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  {/* Student Photo */}
-                  {getStudentImageSrc(selectedItem) && (
-                    <div style={{ textAlign: "center" }}>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          marginBottom: 4,
-                          color: "#64748b",
-                          fontWeight: 500,
-                        }}
-                      >
-                        Student Image
-                      </div>
-                      <Image
-                        src={getStudentImageSrc(selectedItem)}
-                        alt={`${selectedItem.name}'s photo`}
-                        width={82}
-                        height={82}
-                        style={{
-                          objectFit: "cover",
-                          border: "2px solid #e0e7ff",
-                          boxShadow: "0 4px 10px rgba(15, 23, 42, 0.15)",
-                        }}
-                        preview={{
-                          mask: (
-                            <span
-                              style={{
-                                fontSize: 11,
-                                padding: "2px 6px",
-                                borderRadius: 999,
-                                background: "rgba(15, 23, 42, 0.45)",
-                                color: "#fff",
-                              }}
-                            >
-                              Click to zoom
-                            </span>
-                          ),
-                        }}
-                      />
+              {/* 🚀 OPTIMIZED: Image section with loading states */}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  minHeight: 90,
+                }}
+              >
+                {detailLoading ? (
+                  <div style={{ textAlign: "center", padding: "20px" }}>
+                    <Spin 
+                      indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />}
+                    />
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+                      Loading images...
                     </div>
-                  )}
-
-                  {/* Leave Letter (only for leave requests) */}
-                  {selectedItem.permission === "leave" &&
-                    getLeaveLetterSrc(selectedItem) && (
+                  </div>
+                ) : (
+                  <>
+                    {/* Student Photo */}
+                    {detailedItem && getStudentImageSrc(detailedItem) && (
                       <div style={{ textAlign: "center" }}>
                         <div
                           style={{
@@ -1417,17 +1332,17 @@ function OutPassRequest() {
                             fontWeight: 500,
                           }}
                         >
-                          Leave Letter
+                          Student Image
                         </div>
                         <Image
-                          src={getLeaveLetterSrc(selectedItem)}
-                          alt="Leave letter"
+                          src={getStudentImageSrc(detailedItem)}
+                          alt={`${selectedItem.name}'s photo`}
                           width={82}
                           height={82}
                           style={{
                             objectFit: "cover",
                             border: "2px solid #e0e7ff",
-                            boxShadow: "0 4px 10px rgba(127, 29, 29, 0.2)",
+                            boxShadow: "0 4px 10px rgba(15, 23, 42, 0.15)",
                           }}
                           preview={{
                             mask: (
@@ -1436,22 +1351,75 @@ function OutPassRequest() {
                                   fontSize: 11,
                                   padding: "2px 6px",
                                   borderRadius: 999,
-                                  background: "rgba(127, 29, 29, 0.6)",
+                                  background: "rgba(15, 23, 42, 0.45)",
                                   color: "#fff",
                                 }}
                               >
-                                View letter
+                                Click to zoom
                               </span>
                             ),
                           }}
                         />
                       </div>
                     )}
-                </div>
-              )}
+
+                    {/* Leave Letter (only for leave requests) */}
+                    {detailedItem &&
+                      selectedItem.permission === "leave" &&
+                      getLeaveLetterSrc(detailedItem) && (
+                        <div style={{ textAlign: "center" }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              marginBottom: 4,
+                              color: "#64748b",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Leave Letter
+                          </div>
+                          <Image
+                            src={getLeaveLetterSrc(detailedItem)}
+                            alt="Leave letter"
+                            width={82}
+                            height={82}
+                            style={{
+                              objectFit: "cover",
+                              border: "2px solid #e0e7ff",
+                              boxShadow: "0 4px 10px rgba(127, 29, 29, 0.2)",
+                            }}
+                            preview={{
+                              mask: (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    padding: "2px 6px",
+                                    borderRadius: 999,
+                                    background: "rgba(127, 29, 29, 0.6)",
+                                    color: "#fff",
+                                  }}
+                                >
+                                  View letter
+                                </span>
+                              ),
+                            }}
+                          />
+                        </div>
+                      )}
+
+                    {/* Show placeholders if no images are found and loading is complete */}
+                    {!detailLoading && (!detailedItem || (!getStudentImageSrc(detailedItem) && 
+                      !(selectedItem.permission === "leave" && getLeaveLetterSrc(detailedItem)))) && (
+                      <div style={{ textAlign: "center", color: "#999", fontSize: 12 }}>
+                        No images available
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Main Details */}
+            {/* Main Details - use selectedItem for basic info, detailedItem for extended data */}
             <Descriptions
               bordered
               column={2}
@@ -1597,9 +1565,9 @@ function OutPassRequest() {
                 </Descriptions>
               )}
 
-            {/* QR Code (Outpass only) */}
+            {/* QR Code (Outpass only) - use detailedItem for QR data */}
             {selectedItem.status === "Accepted" &&
-              selectedItem.qr_code &&
+              detailedItem?.qr_code &&
               (!selectedItem.permission ||
                 selectedItem.permission === "permission") && (
                 <div style={{ textAlign: "center", marginTop: 20 }}>
@@ -1607,7 +1575,7 @@ function OutPassRequest() {
                     Entry/Exit QR Pass
                   </h4>
                   <img
-                    src={selectedItem.qr_code}
+                    src={detailedItem.qr_code}
                     alt="QR Code"
                     style={{
                       width: "150px",
@@ -1615,10 +1583,10 @@ function OutPassRequest() {
                       border: "1px solid #ddd",
                     }}
                   />
-                  {selectedItem.valid_until && (
+                  {detailedItem.valid_until && (
                     <p style={{ color: "red", marginTop: 10 }}>
                       Valid Until:{" "}
-                      {new Date(selectedItem.valid_until).toLocaleString()}
+                      {new Date(detailedItem.valid_until).toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -1637,9 +1605,7 @@ function OutPassRequest() {
             >
               Requested:&nbsp;
               <span style={{ fontWeight: "600" }}>
-                {new Date(
-                  String(selectedItem.created_at).replace("Z", "")
-                ).toLocaleString("en-US", {
+                {new Date(selectedItem.created_at).toLocaleString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
@@ -1647,7 +1613,6 @@ function OutPassRequest() {
                   minute: "2-digit",
                   second: "2-digit",
                   hour12: true,
-                  timeZone: "Asia/Kolkata",
                 })}
               </span>
             </p>
