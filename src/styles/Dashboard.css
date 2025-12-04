@@ -4,7 +4,63 @@
   min-height: 100%;
 }
 
-/* header */
+/* ============================
+   GLOBAL VIEW TOGGLE (ALL / OUTING / LEAVE)
+   ============================ */
+
+.dashboard-view-toggle {
+  display: inline-flex;
+  gap: 8px;
+  /* margin-bottom: 16px; */
+}
+
+.dashboard-view-toggle-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #d0d7e2;
+  background: #f5f7fb;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #1565c0;
+}
+
+.dashboard-view-toggle-btn:hover {
+  background: #e3ebff;
+}
+
+.dashboard-view-toggle-btn.active {
+  background: #1e88e5;
+  color: #ffffff;
+  border-color: #1565c0;
+  box-shadow: 0 0 0 1px rgba(21, 101, 192, 0.12);
+}
+
+/* layout when both dashboards are visible */
+.dashboard-split-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: flex-start;
+}
+
+/* layout when only one (OUTING / LEAVE) is shown – now full width */
+.dashboard-single-layout {
+  width: 100%;
+}
+
+/* small screens: stack even in ALL mode */
+@media (max-width: 1024px) {
+  .dashboard-split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================
+   HEADER
+   ============================ */
+
 .dashboard-container-header {
   display: flex;
   align-items: baseline;
@@ -244,7 +300,10 @@
   box-shadow: 0 2px 6px rgba(21, 101, 192, 0.25);
 }
 
-/* modal for enhanced charts */
+/* ============================
+   MODAL FOR ENHANCED CHARTS
+   ============================ */
+
 .dashboard-modal-backdrop {
   position: fixed;
   inset: 0;
