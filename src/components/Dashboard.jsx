@@ -50,11 +50,13 @@ function Dashboard() {
       try {
         setLoading(true);
         const res = await fetch(
-          `${API_BASE_URL}/outpass-route/getinfo/outpass`
+          `${API_BASE_URL}/outpass-route/getinfo/outpass-dashboard`
         );
         if (!res.ok) throw new Error("Failed to fetch dashboard data");
         const json = await res.json();
-        setData(json || []);
+
+        // this endpoint returns a plain array
+        setData(Array.isArray(json) ? json : []);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
       } finally {
