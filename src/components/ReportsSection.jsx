@@ -52,10 +52,10 @@ import {
     DeleteOutlined,
     EyeOutlined,
     CalendarOutlined,
-    ClockCircleOutlined,
+    // ClockCircleOutlined,
     MailOutlined,
     StopOutlined,
-    PlayCircleOutlined,
+    // PlayCircleOutlined,
     SettingOutlined,
     ExclamationCircleOutlined,
     InfoCircleOutlined,
@@ -69,7 +69,19 @@ import {
     TableOutlined
 } from "@ant-design/icons";
 import toast from "react-hot-toast";
-
+import { 
+    SearchOutlined,
+//     WarningOutlined,
+//     CheckCircleOutlined,
+//     FireOutlined,
+    ClockCircleOutlined,
+//     ThunderboltOutlined,
+    HourglassOutlined,
+//     MoonOutlined,
+//     CalendarOutlined,
+//     StopOutlined,
+    PlayCircleOutlined
+} from "@ant-design/icons";
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 const { TextArea } = Input;
@@ -83,7 +95,473 @@ const POLLING_INTERVAL = 30000;
 
 // Extend dayjs with isBetween plugin
 dayjs.extend(isBetween);
+const animationStyles = `
 
+
+/* Color variations */
+.icon-danger { color: #ff4d4f; }
+.icon-warning { color: #ff7a00; }
+.icon-success { color: #52c41a; }
+.icon-info { color: #1890ff; }
+.icon-purple { color: #722ed1; }
+.icon-orange { color: #faad14; }
+`;
+
+// 🎨 Animated Icon Component
+const AnimatedIcon = ({ 
+    icon: Icon, 
+    animation = 'pulse', 
+    color = 'icon-info',
+    size = 16,
+    className = '',
+    style = {} 
+}) => {
+    const [isHovered, setIsHovered] = useState(false);
+    
+    return (
+        <span 
+            className={`animated-icon icon-${animation} ${color} ${className}`}
+            style={{
+                fontSize: `${size}px`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: `${size + 4}px`,
+                height: `${size + 4}px`,
+                ...style
+            }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <Icon style={{ 
+                fontSize: `${size}px`,
+                transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                transition: 'transform 0.2s ease'
+            }} />
+        </span>
+    );
+};
+
+const violationIcons = {
+    all: { icon: SearchOutlined, animation: 'pulse', color: 'icon-info' },
+    violations: { icon: WarningOutlined, animation: 'shake', color: 'icon-danger' },
+    clean: { icon: CheckCircleOutlined, animation: 'pulse', color: 'icon-success' },
+    
+    leaveCritical: { icon: FireOutlined, animation: 'glow', color: 'icon-danger' },
+    leaveLate: { icon: ClockCircleOutlined, animation: 'bounce', color: 'icon-warning' },
+    
+    outpassCritical: { icon: ThunderboltOutlined, animation: 'shake', color: 'icon-danger' },
+    outpassExtended: { icon: HourglassOutlined, animation: 'rotate', color: 'icon-warning' },
+    outpassDuration: { icon: ClockCircleOutlined, animation: 'pulse', color: 'icon-orange' },
+    
+    afterHours: { icon: MoonOutlined, animation: 'glow', color: 'icon-purple' },
+    overdue: { icon: CalendarOutlined, animation: 'shake', color: 'icon-danger' },
+    expired: { icon: StopOutlined, animation: 'pulse', color: 'icon-danger' },
+    completed: { icon: PlayCircleOutlined, animation: 'bounce', color: 'icon-success' }
+};
+const ViolationIcon = ({ type, size = 16, className = '' }) => {
+    const config = violationIcons[type] || violationIcons.all;
+    
+    return (
+        <AnimatedIcon
+            icon={config.icon}
+            animation={config.animation}
+            color={config.color}
+            size={size}
+            className={className}
+        />
+    );
+};
+const EnhancedViolationSelect = ({ 
+    value, 
+    onChange, 
+    statistics, 
+    style = { width: 240 } 
+}) => {
+    useEffect(() => {
+        // Inject styles
+        const styleElement = document.createElement('style');
+        styleElement.textContent = animationStyles;
+        document.head.appendChild(styleElement);
+        
+        return () => {
+            document.head.removeChild(styleElement);
+        };
+    }, []);
+
+    return (
+        <Select
+            value={value}
+            onChange={onChange}
+            style={style}
+            placeholder="Select Violation Filter"
+            showSearch
+            optionFilterProp="label"
+            dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+            dropdownRender={(menu) => (
+                <div>
+                    {/* Enhanced Header with Animated Stats */}
+                    <div style={{
+                        padding: '8px 12px',
+                        borderBottom: '1px solid #f0f0f0',
+                        backgroundColor: 'linear-gradient(90deg, #f0f9ff 0%, #e6f7ff 100%)',
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}>
+                        <ViolationIcon type="violations" size={14} />
+                        <span>
+                            <strong>Violations:</strong> {statistics.violations} | 
+                            <strong> Clean:</strong> {statistics.total - statistics.violations}
+                        </span>
+                    </div>
+                    {menu}
+                </div>
+            )}
+        >
+            {/* 🎨 MAIN CATEGORIES - With Animated Icons */}
+            <Option value="All" label="All Records">
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    padding: '2px 0'
+                }}>
+                    <ViolationIcon type="all" />
+                    <span>All Records</span>
+                    <span style={{ 
+                        marginLeft: 'auto', 
+                        color: '#999', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        
+                    }}>
+                        ({statistics.total})
+                    </span>
+                </div>
+            </Option>
+            
+            <Option value="Violations" label="Any Violations">
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    padding: '2px 0'
+                }}>
+                    <ViolationIcon type="violations" />
+                    <span style={{ color: '#ff4d4f', fontWeight: '500' }}>Any Violations</span>
+                    <span style={{ 
+                        marginLeft: 'auto', 
+                        color: '#ff4d4f', 
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                    }}>
+                        ({statistics.violations})
+                    </span>
+                </div>
+            </Option>
+            
+            <Option value="Clean" label="Clean Records">
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    padding: '2px 0'
+                }}>
+                    <ViolationIcon type="clean" />
+                    <span style={{ color: '#52c41a', fontWeight: '500' }}>Clean Records</span>
+                    <span style={{ 
+                        marginLeft: 'auto', 
+                        color: '#52c41a', 
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                    }}>
+                        ({statistics.total - statistics.violations})
+                    </span>
+                </div>
+            </Option>
+            
+            {/* Elegant Divider */}
+            <Option disabled style={{ height: '1px', padding: 0, margin: '8px 0' }}>
+                <div style={{ 
+                    height: '1px', 
+                    background: 'linear-gradient(90deg, transparent, #d9d9d9, transparent)' 
+                }}></div>
+            </Option>
+
+            {/* 🎨 LEAVE VIOLATIONS - Enhanced with Animations */}
+            <Option value="LeaveCritical" label="Leave Critical">
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0',
+                    borderRadius: '4px',
+                    transition: 'background-color 0.2s ease'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ViolationIcon type="leaveCritical" />
+                        <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                            Leave Critical
+                        </span>
+                    </div>
+                    <span style={{ 
+                        color: '#ff4d4f', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#fff1f0',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                    }}>
+                        {statistics.leaveCriticalViolations}
+                    </span>
+                </div>
+            </Option>
+            
+            <Option value="LeaveLate" label="Leave Late">
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ViolationIcon type="leaveLate" />
+                        <span style={{ color: '#ff7a00', fontWeight: '500' }}>
+                            Leave Late Returns
+                        </span>
+                    </div>
+                    <span style={{ 
+                        color: '#ff7a00', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#fff7e6',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                    }}>
+                        {statistics.leaveLateReturns}
+                    </span>
+                </div>
+            </Option>
+
+            {/* 🎨 OUTPASS VIOLATIONS - Enhanced with Animations */}
+            <Option value="OutpassCritical" label="Outpass Critical">
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ViolationIcon type="outpassCritical" />
+                        <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                            Outpass Critical
+                        </span>
+                    </div>
+                    <span style={{ 
+                        color: '#ff4d4f', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#fff1f0',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                    }}>
+                        {statistics.outpassCritical}
+                    </span>
+                </div>
+            </Option>
+            
+            <Option value="OutpassExtended" label="Outpass Extended">
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ViolationIcon type="outpassExtended" />
+                        <span style={{ color: '#ff7a00', fontWeight: '500' }}>
+                            Outpass Extended
+                        </span>
+                    </div>
+                    <span style={{ 
+                        color: '#ff7a00', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#fff7e6',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                    }}>
+                        {statistics.outpassExtended}
+                    </span>
+                </div>
+            </Option>
+            
+            <Option value="OutpassDuration" label="Outpass Duration">
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ViolationIcon type="outpassDuration" />
+                        <span style={{ color: '#faad14', fontWeight: '500' }}>
+                            Duration Exceeded
+                        </span>
+                    </div>
+                    <span style={{ 
+                        color: '#faad14', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#fffbe6',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                    }}>
+                        {statistics.outpassDurationExceeded}
+                    </span>
+                </div>
+            </Option>
+
+            {/* 🎨 STATUS & TIMING - Enhanced with Animations */}
+            <Option value="AfterHours" label="After Hours">
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ViolationIcon type="afterHours" />
+                        <span style={{ color: '#722ed1', fontWeight: '500' }}>After Hours Returns</span>
+                    </div>
+                    <span style={{ 
+                        color: '#722ed1', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#f9f0ff',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                    }}>
+                        {statistics.outpassAfterHours}
+                    </span>
+                </div>
+            </Option>
+            
+            <Option value="Overdue" label="Overdue">
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ViolationIcon type="overdue" />
+                        <span style={{ color: '#ff4d4f', fontWeight: '500' }}>Currently Overdue</span>
+                    </div>
+                    <span style={{ 
+                        color: '#ff4d4f', 
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        backgroundColor: '#fff1f0',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                    }}>
+                        {statistics.overdue}
+                    </span>
+                </div>
+            </Option>
+            
+            <Option value="Expired" label="Expired">
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    padding: '4px 0'
+                }}>
+                    <ViolationIcon type="expired" />
+                    <span style={{ color: '#ff4d4f', fontWeight: '500' }}>Expired (Past Due Date)</span>
+                </div>
+            </Option>
+            
+            <Option value="Completed" label="Completed">
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    padding: '4px 0'
+                }}>
+                    <ViolationIcon type="completed" />
+                    <span style={{ color: '#52c41a', fontWeight: '500' }}>Completed Returns</span>
+                </div>
+            </Option>
+        </Select>
+    );
+};
+
+const AnimatedFilterButtons = ({ violationFilter, setViolationFilter, statistics }) => {
+    return (
+        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <Button
+                size="small"
+                type={violationFilter === "LeaveCritical" ? "primary" : "default"}
+                danger={violationFilter === "LeaveCritical"}
+                onClick={() => setViolationFilter("LeaveCritical")}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    height: '32px',
+                    borderRadius: '16px',
+                    fontWeight: '500'
+                }}
+            >
+                <ViolationIcon type="leaveCritical" size={14} />
+                Leave Critical ({statistics.leaveCriticalViolations})
+            </Button>
+            
+            <Button
+                size="small"
+                type={violationFilter === "OutpassCritical" ? "primary" : "default"}
+                danger={violationFilter === "OutpassCritical"}
+                onClick={() => setViolationFilter("OutpassCritical")}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    height: '32px',
+                    borderRadius: '16px',
+                    fontWeight: '500'
+                }}
+            >
+                <ViolationIcon type="outpassCritical" size={14} />
+                Outpass Critical ({statistics.outpassCritical})
+            </Button>
+            
+            <Button
+                size="small"
+                type={violationFilter === "Clean" ? "primary" : "default"}
+                onClick={() => setViolationFilter("Clean")}
+                style={{
+                    backgroundColor: violationFilter === "Clean" ? "#52c41a" : undefined,
+                    borderColor: violationFilter === "Clean" ? "#52c41a" : undefined,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    height: '32px',
+                    borderRadius: '16px',
+                    fontWeight: '500'
+                }}
+            >
+                <ViolationIcon type="clean" size={14} />
+                Clean Records
+            </Button>
+            
+            {/* Add more buttons as needed... */}
+        </div>
+    );
+};
 const ReportsSection = () => {
     // Core Data States
     const [data, setData] = useState([]);
@@ -483,233 +961,233 @@ const ReportsSection = () => {
                     </Button>
                 ]}
             >
-            <div style={{ marginBottom: '16px' }}>
-    <Card 
-        size="small" 
-        style={{ 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            border: 'none',
-            borderRadius: '12px',
-            overflow: 'hidden'
-        }}
-    >
-        <div style={{ 
-            background: 'rgba(255, 255, 255, 0.95)', 
-            margin: '-16px', 
-            padding: '20px',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '12px'
-        }}>
-            <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                marginBottom: '16px',
-                paddingBottom: '12px',
-                borderBottom: '2px solid #f0f2ff'
-            }}>
-                <div style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #667eea, #764ba2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: '16px',
-                    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-                }}>
-                    <EyeOutlined style={{ fontSize: '24px', color: 'white' }} />
-                </div>
-                <div>
-                    <Title level={4} style={{ 
-                        margin: 0, 
-                        background: 'linear-gradient(135deg, #667eea, #764ba2)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        fontWeight: 600
-                    }}>
-                        Data Preview
-                    </Title>
-                    <Text type="secondary" style={{ fontSize: '14px' }}>
-                        Review your data before sending
-                    </Text>
-                </div>
-            </div>
-
-            <Row gutter={[16, 12]}>
-                <Col xs={24} sm={12}>
-                    <Card size="small" style={{ 
-                        borderRadius: '8px', 
-                        border: '1px solid #e8f0ff',
-                        background: 'linear-gradient(to right, #f8faff, #ffffff)'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ marginBottom: '16px' }}>
+                    <Card
+                        size="small"
+                        style={{
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            border: 'none',
+                            borderRadius: '12px',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        <div style={{
+                            background: 'rgba(255, 255, 255, 0.95)',
+                            margin: '-16px',
+                            padding: '20px',
+                            backdropFilter: 'blur(10px)',
+                            borderRadius: '12px'
+                        }}>
                             <div style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                background: config.source === 'selected' ? 'linear-gradient(135deg, #52c41a, #389e0d)' : 'linear-gradient(135deg, #1890ff, #096dd9)',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                marginRight: '12px'
+                                marginBottom: '16px',
+                                paddingBottom: '12px',
+                                borderBottom: '2px solid #f0f2ff'
                             }}>
-                                {config.source === 'selected' ? 
-                                    <CheckSquareOutlined style={{ fontSize: '16px', color: 'white' }} /> :
-                                    <UnorderedListOutlined style={{ fontSize: '16px', color: 'white' }} />
-                                }
+                                <div style={{
+                                    width: '48px',
+                                    height: '48px',
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginRight: '16px',
+                                    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+                                }}>
+                                    <EyeOutlined style={{ fontSize: '24px', color: 'white' }} />
+                                </div>
+                                <div>
+                                    <Title level={4} style={{
+                                        margin: 0,
+                                        background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent',
+                                        fontWeight: 600
+                                    }}>
+                                        Data Preview
+                                    </Title>
+                                    <Text type="secondary" style={{ fontSize: '14px' }}>
+                                        Review your data before sending
+                                    </Text>
+                                </div>
                             </div>
-                            <div>
-                                <Text strong style={{ display: 'block', fontSize: '16px', color: '#1a1a1a' }}>
-                                    {dataToPreview?.length || 0}
-                                </Text>
-                                <Text type="secondary" style={{ fontSize: '12px' }}>
-                                    {config.source === 'selected' ? 'Selected' : 'Filtered'} Records
-                                </Text>
+
+                            <Row gutter={[16, 12]}>
+                                <Col xs={24} sm={12}>
+                                    <Card size="small" style={{
+                                        borderRadius: '8px',
+                                        border: '1px solid #e8f0ff',
+                                        background: 'linear-gradient(to right, #f8faff, #ffffff)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <div style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                background: config.source === 'selected' ? 'linear-gradient(135deg, #52c41a, #389e0d)' : 'linear-gradient(135deg, #1890ff, #096dd9)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginRight: '12px'
+                                            }}>
+                                                {config.source === 'selected' ?
+                                                    <CheckSquareOutlined style={{ fontSize: '16px', color: 'white' }} /> :
+                                                    <UnorderedListOutlined style={{ fontSize: '16px', color: 'white' }} />
+                                                }
+                                            </div>
+                                            <div>
+                                                <Text strong style={{ display: 'block', fontSize: '16px', color: '#1a1a1a' }}>
+                                                    {dataToPreview?.length || 0}
+                                                </Text>
+                                                <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                    {config.source === 'selected' ? 'Selected' : 'Filtered'} Records
+                                                </Text>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </Col>
+
+                                <Col xs={24} sm={12}>
+                                    <Card size="small" style={{
+                                        borderRadius: '8px',
+                                        border: '1px solid #fff7e6',
+                                        background: 'linear-gradient(to right, #fffbf0, #ffffff)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <div style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                background: 'linear-gradient(135deg, #faad14, #d48806)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginRight: '12px'
+                                            }}>
+                                                <MailOutlined style={{ fontSize: '16px', color: 'white' }} />
+                                            </div>
+                                            <div>
+                                                <Text strong style={{ display: 'block', fontSize: '14px', color: '#1a1a1a' }}>
+                                                    {config.recipients?.length ? config.recipients.length : 'N/A'} Recipients
+                                                </Text>
+                                                <Text type="secondary" style={{ fontSize: '11px' }}>
+                                                    {config.recipients?.length > 0 ? config.recipients[0] : 'Not specified'}
+                                                    {config.recipients?.length > 1 && ` +${config.recipients.length - 1} more`}
+                                                </Text>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </Col>
+
+                                <Col xs={24} sm={12}>
+                                    <Card size="small" style={{
+                                        borderRadius: '8px',
+                                        border: '1px solid #f6ffed',
+                                        background: 'linear-gradient(to right, #f6ffed, #ffffff)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <div style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                background: 'linear-gradient(135deg, #52c41a, #389e0d)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginRight: '12px'
+                                            }}>
+                                                <FileTextOutlined style={{ fontSize: '16px', color: 'white' }} />
+                                            </div>
+                                            <div>
+                                                <Text strong style={{ display: 'block', fontSize: '14px', color: '#1a1a1a' }}>
+                                                    {config.reportType || 'Standard'}
+                                                </Text>
+                                                <Text type="secondary" style={{ fontSize: '11px' }}>
+                                                    Report Type
+                                                </Text>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </Col>
+
+                                <Col xs={24} sm={12}>
+                                    <Card size="small" style={{
+                                        borderRadius: '8px',
+                                        border: '1px solid #fff1f0',
+                                        background: 'linear-gradient(to right, #fff1f0, #ffffff)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <div style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                background: 'linear-gradient(135deg, #ff4d4f, #cf1322)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginRight: '12px'
+                                            }}>
+                                                {config.format === 'pdf' ?
+                                                    <FilePdfOutlined style={{ fontSize: '16px', color: 'white' }} /> :
+                                                    <FileExcelOutlined style={{ fontSize: '16px', color: 'white' }} />
+                                                }
+                                            </div>
+                                            <div>
+                                                <Text strong style={{ display: 'block', fontSize: '14px', color: '#1a1a1a' }}>
+                                                    {(config.format || 'Excel').toUpperCase()}
+                                                </Text>
+                                                <Text type="secondary" style={{ fontSize: '11px' }}>
+                                                    Export Format
+                                                </Text>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </Col>
+                            </Row>
+
+                            {/* Status Bar */}
+                            <div style={{
+                                marginTop: '16px',
+                                padding: '12px 16px',
+                                background: 'linear-gradient(90deg, #e6f7ff 0%, #f0f9ff 100%)',
+                                borderRadius: '8px',
+                                border: '1px solid #d4edda',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    <CheckCircleOutlined style={{
+                                        fontSize: '18px',
+                                        color: '#52c41a',
+                                        marginRight: '8px',
+                                        animation: 'pulse 2s infinite'
+                                    }} />
+                                    <Text style={{ color: '#52c41a', fontWeight: 500 }}>
+                                        Ready to process {dataToPreview?.length || 0} records
+                                    </Text>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    {[...Array(3)].map((_, i) => (
+                                        <div
+                                            key={i}
+                                            style={{
+                                                width: '6px',
+                                                height: '6px',
+                                                borderRadius: '50%',
+                                                background: '#52c41a',
+                                                animation: `bounce 1.4s infinite ${i * 0.16}s`
+                                            }}
+                                        />
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </Card>
-                </Col>
 
-                <Col xs={24} sm={12}>
-                    <Card size="small" style={{ 
-                        borderRadius: '8px', 
-                        border: '1px solid #fff7e6',
-                        background: 'linear-gradient(to right, #fffbf0, #ffffff)'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <div style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                background: 'linear-gradient(135deg, #faad14, #d48806)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginRight: '12px'
-                            }}>
-                                <MailOutlined style={{ fontSize: '16px', color: 'white' }} />
-                            </div>
-                            <div>
-                                <Text strong style={{ display: 'block', fontSize: '14px', color: '#1a1a1a' }}>
-                                    {config.recipients?.length ? config.recipients.length : 'N/A'} Recipients
-                                </Text>
-                                <Text type="secondary" style={{ fontSize: '11px' }}>
-                                    {config.recipients?.length > 0 ? config.recipients[0] : 'Not specified'}
-                                    {config.recipients?.length > 1 && ` +${config.recipients.length - 1} more`}
-                                </Text>
-                            </div>
-                        </div>
-                    </Card>
-                </Col>
-
-                <Col xs={24} sm={12}>
-                    <Card size="small" style={{ 
-                        borderRadius: '8px', 
-                        border: '1px solid #f6ffed',
-                        background: 'linear-gradient(to right, #f6ffed, #ffffff)'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <div style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                background: 'linear-gradient(135deg, #52c41a, #389e0d)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginRight: '12px'
-                            }}>
-                                <FileTextOutlined style={{ fontSize: '16px', color: 'white' }} />
-                            </div>
-                            <div>
-                                <Text strong style={{ display: 'block', fontSize: '14px', color: '#1a1a1a' }}>
-                                    {config.reportType || 'Standard'}
-                                </Text>
-                                <Text type="secondary" style={{ fontSize: '11px' }}>
-                                    Report Type
-                                </Text>
-                            </div>
-                        </div>
-                    </Card>
-                </Col>
-
-                <Col xs={24} sm={12}>
-                    <Card size="small" style={{ 
-                        borderRadius: '8px', 
-                        border: '1px solid #fff1f0',
-                        background: 'linear-gradient(to right, #fff1f0, #ffffff)'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <div style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                background: 'linear-gradient(135deg, #ff4d4f, #cf1322)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginRight: '12px'
-                            }}>
-                                {config.format === 'pdf' ? 
-                                    <FilePdfOutlined style={{ fontSize: '16px', color: 'white' }} /> :
-                                    <FileExcelOutlined style={{ fontSize: '16px', color: 'white' }} />
-                                }
-                            </div>
-                            <div>
-                                <Text strong style={{ display: 'block', fontSize: '14px', color: '#1a1a1a' }}>
-                                    {(config.format || 'Excel').toUpperCase()}
-                                </Text>
-                                <Text type="secondary" style={{ fontSize: '11px' }}>
-                                    Export Format
-                                </Text>
-                            </div>
-                        </div>
-                    </Card>
-                </Col>
-            </Row>
-
-            {/* Status Bar */}
-            <div style={{ 
-                marginTop: '16px', 
-                padding: '12px 16px', 
-                background: 'linear-gradient(90deg, #e6f7ff 0%, #f0f9ff 100%)',
-                borderRadius: '8px',
-                border: '1px solid #d4edda',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <CheckCircleOutlined style={{ 
-                        fontSize: '18px', 
-                        color: '#52c41a', 
-                        marginRight: '8px',
-                        animation: 'pulse 2s infinite'
-                    }} />
-                    <Text style={{ color: '#52c41a', fontWeight: 500 }}>
-                        Ready to process {dataToPreview?.length || 0} records
-                    </Text>
-                </div>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                    {[...Array(3)].map((_, i) => (
-                        <div 
-                            key={i}
-                            style={{
-                                width: '6px',
-                                height: '6px',
-                                borderRadius: '50%',
-                                background: '#52c41a',
-                                animation: `bounce 1.4s infinite ${i * 0.16}s`
-                            }}
-                        />
-                    ))}
-                </div>
-            </div>
-        </div>
-    </Card>
-
-    <style jsx>{`
+                    <style jsx>{`
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
@@ -730,7 +1208,7 @@ const ReportsSection = () => {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
     `}</style>
-</div>
+                </div>
 
                 <Table
                     dataSource={dataToPreview} // 🆕 FIXED: Show all data, not just first 10
@@ -848,7 +1326,7 @@ const ReportsSection = () => {
 
         setLoadingUsers(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/escalation-masters/getinfo`);
+            const response = await fetch('http://172.30.6.13:5059/api/escalation-masters/getinfo');
             if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
             const users = await response.json();
@@ -1369,19 +1847,19 @@ const ReportsSection = () => {
                 return;
             }
 
-             // 🔧 FIXED: Check skipPreview parameter AND form value
-        if (!skipPreview && values.showPreview) {
-            setPreviewConfig({
-                data: operationData.data,
-                source: operationData.source,
-                type: 'export',
-                reportType: values.reportType,
-                format: values.format,
-                recipients: ['Local Download']
-            });
-            setPreviewModalVisible(true);
-            return; // Exit here, actual export will be triggered from preview modal
-        }
+            // 🔧 FIXED: Check skipPreview parameter AND form value
+            if (!skipPreview && values.showPreview) {
+                setPreviewConfig({
+                    data: operationData.data,
+                    source: operationData.source,
+                    type: 'export',
+                    reportType: values.reportType,
+                    format: values.format,
+                    recipients: ['Local Download']
+                });
+                setPreviewModalVisible(true);
+                return; // Exit here, actual export will be triggered from preview modal
+            }
 
 
             setExportLoading(true);
@@ -1425,38 +1903,38 @@ const ReportsSection = () => {
 
             if (!response.ok) throw new Error('Export failed');
 
-           // 🔧 FIXED: Ensure proper MIME type and filename for Excel
-// 🔧 FIXED: Use the filename from Content-Disposition header sent by backend
-const blob = await response.blob();
+            // 🔧 FIXED: Ensure proper MIME type and filename for Excel
+            // 🔧 FIXED: Use the filename from Content-Disposition header sent by backend
+            const blob = await response.blob();
 
-// Extract filename from Content-Disposition header if available
-let downloadFilename = `report_${dayjs().format('YYYY-MM-DD')}.${values.format === 'excel' ? 'xlsx' : values.format}`;
+            // Extract filename from Content-Disposition header if available
+            let downloadFilename = `report_${dayjs().format('YYYY-MM-DD')}.${values.format === 'excel' ? 'xlsx' : values.format}`;
 
-const contentDisposition = response.headers.get('Content-Disposition');
-if (contentDisposition) {
-    const matches = contentDisposition.match(/filename=([^;]+)/);
-    if (matches && matches[1]) {
-        downloadFilename = matches[1].replace(/"/g, '').trim();
-    }
-}
+            const contentDisposition = response.headers.get('Content-Disposition');
+            if (contentDisposition) {
+                const matches = contentDisposition.match(/filename=([^;]+)/);
+                if (matches && matches[1]) {
+                    downloadFilename = matches[1].replace(/"/g, '').trim();
+                }
+            }
 
-// 🔧 CRITICAL: Set correct MIME type before creating blob
-let finalBlob = blob;
-if (values.format === 'excel') {
-    finalBlob = new Blob([blob], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-    });
-} else if (values.format === 'pdf') {
-    finalBlob = new Blob([blob], { type: 'application/pdf' });
-}
+            // 🔧 CRITICAL: Set correct MIME type before creating blob
+            let finalBlob = blob;
+            if (values.format === 'excel') {
+                finalBlob = new Blob([blob], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                });
+            } else if (values.format === 'pdf') {
+                finalBlob = new Blob([blob], { type: 'application/pdf' });
+            }
 
-// Create and trigger download
-const url = window.URL.createObjectURL(finalBlob);
-const a = document.createElement('a');
-a.href = url;
-a.download = downloadFilename; // 🔧 Use extracted filename from backend
-a.click();
-window.URL.revokeObjectURL(url);
+            // Create and trigger download
+            const url = window.URL.createObjectURL(finalBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = downloadFilename; // 🔧 Use extracted filename from backend
+            a.click();
+            window.URL.revokeObjectURL(url);
 
 
 
@@ -1485,12 +1963,12 @@ window.URL.revokeObjectURL(url);
     };
 
     // 🚀 ENHANCED: Email Handler with Selection and Preview Support
-    const handleImmediateEmail = async (fromPreview  = false) => {
+    const handleImmediateEmail = async (fromPreview = false) => {
         try {
             const values = await immediateEmailForm.validateFields();
             const useSelection = values.dataSource === 'selected';
             const operationData = getDataForOperation(useSelection);
-            
+
 
             if (!operationData.data || operationData.data.length === 0) {
                 notification.warning({
@@ -1504,7 +1982,7 @@ window.URL.revokeObjectURL(url);
 
             // 🆕 NEW: Show preview for emails if requested or if data is small
             if (!fromPreview && values.showPreview) {
-                      const operationData = getDataForOperation(useSelection);
+                const operationData = getDataForOperation(useSelection);
 
                 setPreviewConfig({
                     data: operationData.data,
@@ -1870,24 +2348,24 @@ window.URL.revokeObjectURL(url);
             const useSelection = values.dataSource === 'selected';
             const operationData = getDataForOperation(useSelection);
 
-              // 🆕 ADD: Preview check for schedules (ADD THIS BLOCK)
-        if (!values._skipPreview && values.showPreview) {
-            setPreviewConfig({
-                data: operationData.data,
-                source: operationData.source,
-                type: 'schedule',
-                reportType: values.reportType,
-                format: values.formats,
-                recipients: values.toEmails,
-                scheduleInfo: {
-                    frequency: repeatType,
-                    time: values.time?.format?.('HH:mm') || '09:00',
-                    repeatSummary: getRepeatSummary()
-                }
-            });
-            setPreviewModalVisible(true);
-            return; // Exit here, actual schedule will be triggered from preview modal
-        }
+            // 🆕 ADD: Preview check for schedules (ADD THIS BLOCK)
+            if (!values._skipPreview && values.showPreview) {
+                setPreviewConfig({
+                    data: operationData.data,
+                    source: operationData.source,
+                    type: 'schedule',
+                    reportType: values.reportType,
+                    format: values.formats,
+                    recipients: values.toEmails,
+                    scheduleInfo: {
+                        frequency: repeatType,
+                        time: values.time?.format?.('HH:mm') || '09:00',
+                        repeatSummary: getRepeatSummary()
+                    }
+                });
+                setPreviewModalVisible(true);
+                return; // Exit here, actual schedule will be triggered from preview modal
+            }
 
             // Email validation (unchanged)
             const toEmails = values.toEmails || [];
@@ -2431,26 +2909,26 @@ window.URL.revokeObjectURL(url);
     // Main Render
 
     // NEW: central handler used by preview modal "Confirm & Send"
-const handleConfirmFromPreview = () => {
-  if (!previewConfig) return;
+    const handleConfirmFromPreview = () => {
+        if (!previewConfig) return;
 
-  if (previewConfig.type === "email") {
-    // Avoid validation again; tell handler this came from preview
-    handleImmediateEmail(true);
-  } else if (previewConfig.type === "export") {
-    handleExport(true);
-  } else if (previewConfig.type === "schedule") {
-    const currentValues = scheduleForm.getFieldsValue();
-    scheduleForm.setFieldsValue({
-      ...currentValues,
-      skipPreview: true,
-      showPreview: false,
-    });
-    handleScheduleSetup();
-  }
+        if (previewConfig.type === "email") {
+            // Avoid validation again; tell handler this came from preview
+            handleImmediateEmail(true);
+        } else if (previewConfig.type === "export") {
+            handleExport(true);
+        } else if (previewConfig.type === "schedule") {
+            const currentValues = scheduleForm.getFieldsValue();
+            scheduleForm.setFieldsValue({
+                ...currentValues,
+                skipPreview: true,
+                showPreview: false,
+            });
+            handleScheduleSetup();
+        }
 
-  setPreviewModalVisible(false);
-};
+        setPreviewModalVisible(false);
+    };
 
     return (
         <div style={{ padding: '24px', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
@@ -2695,48 +3173,12 @@ const handleConfirmFromPreview = () => {
                                         ))}
                                     </Select>
 
-                                    <Select
-                                        value={violationFilter}
-                                        onChange={handleViolationChange}
-                                        style={{ width: 200 }}
-                                        placeholder="Leave/Outpass Violations"
-                                    >
-                                        <Option value="All">All Records</Option>
-                                        <Option value="Violations">Any Violations</Option>
-                                        <Option value="Clean">Clean Records</Option>
-
-                                        <Option disabled style={{ fontWeight: 'bold', color: '#1890ff' }}>
-                                            📋 LEAVE VIOLATIONS
-                                        </Option>
-                                        <Option value="LeaveCritical" style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                                            🚨 Leave Critical (Later Days)
-                                        </Option>
-                                        <Option value="LeaveLate" style={{ color: '#ff7a00' }}>
-                                            ⏰ Leave Late (After 9PM)
-                                        </Option>
-
-                                        <Option disabled style={{ fontWeight: 'bold', color: '#52c41a' }}>
-                                            🎯 OUTPASS VIOLATIONS
-                                        </Option>
-                                        <Option value="OutpassCritical" style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                                            🚨 Outpass Critical (24h+ & 9PM+)
-                                        </Option>
-                                        <Option value="OutpassExtended" style={{ color: '#ff7a00' }}>
-                                            🔥 Outpass Extended (24h+ Over)
-                                        </Option>
-                                        <Option value="OutpassDuration" style={{ color: '#faad14' }}>
-                                            ⏰ Outpass Duration Exceeded
-                                        </Option>
-
-                                        <Option disabled style={{ fontWeight: 'bold', color: '#666' }}>
-                                            🔄 GENERAL
-                                        </Option>
-                                        <Option value="AfterHours" style={{ color: '#722ed1' }}>
-                                            🌙 After Hours (All Types)
-                                        </Option>
-                                        <Option value="Late">Regular Late</Option>
-                                        <Option value="Overdue">Overdue</Option>
-                                    </Select>
+         <EnhancedViolationSelect
+    value={violationFilter}
+    onChange={handleViolationChange}
+    statistics={statistics}
+    style={{ width: 240 }}
+/>
 
                                     <Space>
                                         <Button
@@ -2787,61 +3229,7 @@ const handleConfirmFromPreview = () => {
 
                                 {/* Enhanced Quick Filter Buttons */}
                                 <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                    <Button
-                                        size="small"
-                                        type={violationFilter === "LeaveCritical" ? "primary" : "default"}
-                                        danger={violationFilter === "LeaveCritical"}
-                                        icon={<FireOutlined />}
-                                        onClick={() => setViolationFilter("LeaveCritical")}
-                                    >
-                                        Leave Critical ({statistics.leaveCriticalViolations})
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        type={violationFilter === "OutpassCritical" ? "primary" : "default"}
-                                        danger={violationFilter === "OutpassCritical"}
-                                        icon={<FireOutlined />}
-                                        onClick={() => setViolationFilter("OutpassCritical")}
-                                    >
-                                        Outpass Critical ({statistics.outpassCritical})
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        type={violationFilter === "OutpassExtended" ? "primary" : "default"}
-                                        style={{
-                                            backgroundColor: violationFilter === "OutpassExtended" ? "#ff7a00" : undefined,
-                                            borderColor: violationFilter === "OutpassExtended" ? "#ff7a00" : undefined
-                                        }}
-                                        icon={<ClockCircleFilled />}
-                                        onClick={() => setViolationFilter("OutpassExtended")}
-                                    >
-                                        Outpass Extended ({statistics.outpassExtended})
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        type={violationFilter === "LeaveLate" ? "primary" : "default"}
-                                        style={{
-                                            backgroundColor: violationFilter === "LeaveLate" ? "#faad14" : undefined,
-                                            borderColor: violationFilter === "LeaveLate" ? "#faad14" : undefined
-                                        }}
-                                        icon={<MoonOutlined />}
-                                        onClick={() => setViolationFilter("LeaveLate")}
-                                    >
-                                        Leave Late ({statistics.leaveLateReturns})
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        type={violationFilter === "Clean" ? "primary" : "default"}
-                                        style={{
-                                            backgroundColor: violationFilter === "Clean" ? "#52c41a" : undefined,
-                                            borderColor: violationFilter === "Clean" ? "#52c41a" : undefined
-                                        }}
-                                        icon={<CheckCircleOutlined />}
-                                        onClick={() => setViolationFilter("Clean")}
-                                    >
-                                        Clean Records
-                                    </Button>
-
+                                    
                                     {/* 🆕 NEW: Row Selection Buttons */}
                                     <Divider type="vertical" style={{ height: '24px' }} />
                                     <Button
@@ -3180,7 +3568,7 @@ const handleConfirmFromPreview = () => {
                     }
                     open={immediateEmailModalVisible}
                     onCancel={() => setImmediateEmailModalVisible(false)}
-                    onOk={() =>handleImmediateEmail()}
+                    onOk={() => handleImmediateEmail()}
                     confirmLoading={immediateEmailLoading}
                     width={800}
                     okText={
@@ -3833,12 +4221,12 @@ const handleConfirmFromPreview = () => {
                             <Form.Item name="includeViolations" valuePropName="checked">
                                 <Checkbox>Include detailed Leave/Outpass violation analysis in reports</Checkbox>
                             </Form.Item>
-<Form.Item name="showPreview" valuePropName="checked" style={{ marginBottom: 0 }}>
-    <Checkbox>
-        <EyeOutlined style={{ marginRight: '4px' }} />
-        Preview data before creating schedule
-    </Checkbox>
-</Form.Item>
+                            <Form.Item name="showPreview" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                <Checkbox>
+                                    <EyeOutlined style={{ marginRight: '4px' }} />
+                                    Preview data before creating schedule
+                                </Checkbox>
+                            </Form.Item>
                             <Form.Item
                                 label="Custom Message (Optional)"
                                 name="message"
