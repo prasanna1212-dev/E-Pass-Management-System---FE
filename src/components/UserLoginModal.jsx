@@ -73,7 +73,7 @@ function UserLoginModal({ onSignUpClick, redirectPath, onLoginSuccess }) {
       localStorage.setItem("refreshToken", response.data.refreshToken);
 
       let nextRedirectPath = "/user-dashboard";
-      if (role === "admin") nextRedirectPath = "/admin-dashboard";
+      if (role === "superadmin") nextRedirectPath = "/admin-dashboard";
 
       setTimeout(() => {
         navigate(nextRedirectPath, {
