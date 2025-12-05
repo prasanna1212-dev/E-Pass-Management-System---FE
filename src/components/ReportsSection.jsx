@@ -652,20 +652,47 @@ const ReportsSection = () => {
     // Existing helper functions (keeping all violation analysis logic)
     const violationCache = new Map();
 
-    const formatDuration = (hours) => {
-        if (hours < 24) {
-            return `${Math.round(hours)}h`;
+  const formatDuration = (hours) => {
+    // Handle very small durations (less than 1 minute)
+    if (hours < (1/60)) {
+        return '< 1m';
+    }
+    
+    // 🆕 NEW: Handle sub-hour durations by showing exact minutes (no rounding)
+    if (hours < 1) {
+        const minutes = Math.floor(hours * 60);
+        if (minutes === 0) {
+            return '< 1m';
         }
-
-        const days = Math.floor(hours / 24);
-        const remainingHours = Math.round(hours % 24);
-
-        if (remainingHours === 0) {
-            return `${days}d`;
+        return `${minutes}m`;
+    }
+    
+    // 🔧 EXACT: Handle 1-23 hours with exact minutes (no rounding)
+    if (hours < 24) {
+        const wholeHours = Math.floor(hours);
+        const exactMinutes = Math.floor((hours - wholeHours) * 60);
+        
+        if (exactMinutes === 0) {
+            return `${wholeHours}h`;
+        } else {
+            return `${wholeHours}h ${exactMinutes}m`;
         }
+    }
 
+    // Handle 24+ hours with exact calculation (no rounding)
+    const days = Math.floor(hours / 24);
+    const remainingHours = Math.floor(hours % 24);
+    const remainingMinutes = Math.floor(((hours % 24) - remainingHours) * 60);
+
+    if (remainingHours === 0 && remainingMinutes === 0) {
+        return `${days}d`;
+    } else if (remainingMinutes === 0) {
         return `${days}d ${remainingHours}h`;
-    };
+    } else {
+        return `${days}d ${remainingHours}h ${remainingMinutes}m`;
+    }
+};
+
 
     const determineRecordStatus = (record) => {
         const now = dayjs();
