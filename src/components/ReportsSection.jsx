@@ -1554,38 +1554,34 @@ const ReportsSection = () => {
         }
 
         if (dateRange && dateRange.length === 2) {
-            const [start, end] = dateRange;
-            const startDate = dayjs(start).startOf('day');
-            const endDate = dayjs(end).endOf('day');
+    const [start, end] = dateRange;
+    const startDate = dayjs(start).startOf('day');
+    const endDate = dayjs(end).endOf('day');
 
-            filtered = filtered.filter(item => {
-                try {
-                    const checkDates = [];
+    filtered = filtered.filter(item => {
+        try {
+            // 🔧 CHANGED: Only check created_at column for date filtering
+            if (!item.created_at) {
+                return true; // Include records without created_at
+            }
 
-                    if (item.date_from) checkDates.push(dayjs(item.date_from));
-                    if (item.date_to) checkDates.push(dayjs(item.date_to));
-                    if (item.created_at) checkDates.push(dayjs(item.created_at));
-                    if (item.updated_at) checkDates.push(dayjs(item.updated_at));
-                    if (item.entry_time) checkDates.push(dayjs(item.entry_time));
-                    if (item.exit_time) checkDates.push(dayjs(item.exit_time));
+            const createdDate = dayjs(item.created_at);
+            
+            if (!createdDate.isValid()) {
+                return true; // Include records with invalid created_at
+            }
 
-                    const validDates = checkDates.filter(date => date.isValid());
-
-                    if (validDates.length === 0) {
-                        return true;
-                    }
-
-                    return validDates.some(date => {
-                        return date.isBetween(startDate, endDate, null, '[]') ||
-                            date.isSame(startDate, 'day') ||
-                            date.isSame(endDate, 'day');
-                    });
-                } catch (error) {
-                    console.warn('Date filtering error for item:', item.id, error);
-                    return true;
-                }
-            });
+            // Check if created_at falls within the selected date range
+            return createdDate.isBetween(startDate, endDate, null, '[]') ||
+                   createdDate.isSame(startDate, 'day') ||
+                   createdDate.isSame(endDate, 'day');
+                   
+        } catch (error) {
+            console.warn('Date filtering error for item:', item.id, error);
+            return true; // Include records on error
         }
+    });
+}
 
         if (statusFilter && statusFilter !== "All") {
             filtered = filtered.filter(item => {
