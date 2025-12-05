@@ -26,6 +26,21 @@ import "../styles/Dashboard.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 // blue palette
 const BLUE_COLORS = [
   "#0d47a1",
@@ -37,11 +52,21 @@ const BLUE_COLORS = [
 ];
 
 function Dashboard() {
+  const todayRef = dayjs();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // NEW: which global view is active: "ALL" | "OUTPASS" | "LEAVE"
+  // which global view is active: "ALL" | "OUTPASS" | "LEAVE"
   const [viewMode, setViewMode] = useState("ALL");
+
+  // calendar filter: selected date (null = no filter)
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // calendar UI state (month/year + temp selection inside popup)
+  const [calendarMonth, setCalendarMonth] = useState(todayRef.month()); // 0-11
+  const [calendarYear, setCalendarYear] = useState(todayRef.year());
+  const [calendarTempDate, setCalendarTempDate] = useState(null);
 
   // which chart is in "enhanced" view
   const [expandedChart, setExpandedChart] = useState(null);
@@ -75,6 +100,18 @@ function Dashboard() {
   };
 
   const closeExpanded = () => setExpandedChart(null);
+
+    const isSameDay = (a, b) => {
+    if (!a || !b) return false;
+    return a.isSame(b, "day");
+  };
+
+  // year options for dropdown (e.g. 5 years back, 2 ahead)
+  const yearOptions = [];
+  for (let y = todayRef.year() - 5; y <= todayRef.year() + 2; y += 1) {
+    yearOptions.push(y);
+  }
+
 
   // helper: build full datetime from date + time
   const buildDateTime = (dateValue, timeStr) => {
@@ -183,11 +220,23 @@ function Dashboard() {
     };
   };
 
+  // 🔍 filter by selectedDate (null = no filter => full dashboard)
+  const filteredData = useMemo(() => {
+    if (!selectedDate) return data;
+
+    const selectedDay = selectedDate.format("YYYY-MM-DD");
+    return (data || []).filter((item) => {
+      if (!item.created_at) return false;
+      const itemDay = dayjs(item.created_at).format("YYYY-MM-DD");
+      return itemDay === selectedDay;
+    });
+  }, [data, selectedDate]);
+
   const { outpassStats, leaveStats } = useMemo(() => {
-    const outpassData = (data || []).filter(
+    const outpassData = (filteredData || []).filter(
       (item) => item.is_outpass_request || item.request_type === "outpass"
     );
-    const leaveData = (data || []).filter(
+    const leaveData = (filteredData || []).filter(
       (item) => item.is_leave_request || item.request_type === "leave"
     );
 
@@ -195,7 +244,7 @@ function Dashboard() {
       outpassStats: buildStats(outpassData),
       leaveStats: buildStats(leaveData),
     };
-  }, [data]);
+  }, [filteredData]);
 
   const buildSummaryCards = (stats) => {
     const { totalRequests, statusCounts } = stats;
@@ -463,117 +512,117 @@ function Dashboard() {
               </button>
             </div>
 
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={avgDurationByCourse}>
-                {(() => {
-                  const gradientId = `durationArea-${panelTitle.replace(
-                    /\s+/g,
-                    ""
-                  )}`;
-                  return (
-                    <>
-                      <defs>
-                        <linearGradient
-                          id={gradientId}
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="5%"
-                            stopColor={BLUE_COLORS[4]}
-                            stopOpacity={0.8}
-                          />
-                          <stop
-                            offset="95%"
-                            stopColor={BLUE_COLORS[4]}
-                            stopOpacity={0.1}
-                          />
-                        </linearGradient>
-                      </defs>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={avgDurationByCourse}>
+              {(() => {
+                const gradientId = `durationArea-${panelTitle.replace(
+                  /\s+/g,
+                  ""
+                )}`;
+                return (
+                  <>
+                    <defs>
+                      <linearGradient
+                        id={gradientId}
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor={BLUE_COLORS[4]}
+                          stopOpacity={0.8}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={BLUE_COLORS[4]}
+                          stopOpacity={0.1}
+                        />
+                      </linearGradient>
+                    </defs>
 
-                      <XAxis dataKey="course" />
-                      <YAxis />
+                    <XAxis dataKey="course" />
+                    <YAxis />
 
-                      <Tooltip />
+                    <Tooltip />
 
-                      <Area
-                        type="monotone"
-                        dataKey="avgHours"
-                        stroke={BLUE_COLORS[4]}
-                        fill={`url(#${gradientId})`}
-                        strokeWidth={2}
-                      />
-                    </>
-                  );
-                })()}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 5️⃣ Radar Chart – Requests by Institution */}
-          <div className="dashboard-container-card">
-            <div className="dashboard-card-header-row">
-              <h3 className="dashboard-container-card-title">
-                Requests by Institution
-              </h3>
-              <button
-                type="button"
-                className="dashboard-card-enhance-btn"
-                onClick={() => openExpanded(panelKey, "institution")}
-                aria-label="Open enhanced view"
-                title="Enhanced view"
-              >
-                <Maximize2 size={14} />
-              </button>
-            </div>
-            <ResponsiveContainer width="100%" height={260}>
-              <RadarChart data={institutionCounts}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="institution" />
-                <PolarRadiusAxis />
-                <Radar
-                  name="Requests"
-                  dataKey="count"
-                  stroke={BLUE_COLORS[0]}
-                  fill={BLUE_COLORS[1]}
-                  fillOpacity={0.5}
-                />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 6️⃣ Top Purposes – simple list */}
-          <div className="dashboard-container-card">
-            <div className="dashboard-card-header-row">
-              <h3 className="dashboard-container-card-title">Top Purposes</h3>
-              <button
-                type="button"
-                className="dashboard-card-enhance-btn"
-                onClick={() => openExpanded(panelKey, "purposes")}
-                aria-label="Open enhanced view"
-                title="Enhanced view"
-              >
-                <Maximize2 size={14} />
-              </button>
-            </div>
-            <ul className="dashboard-top-purpose-list">
-              {purposeCounts.map((p) => (
-                <li key={p.purpose} className="dashboard-top-purpose-item">
-                  <span className="dashboard-top-purpose-dot" />
-                  <span className="dashboard-top-purpose-label">
-                    {p.purpose}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+                    <Area
+                      type="monotone"
+                      dataKey="avgHours"
+                      stroke={BLUE_COLORS[4]}
+                      fill={`url(#${gradientId})`}
+                      strokeWidth={2}
+                    />
+                  </>
+                );
+              })()}
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
-      </section>
-    );
-  };
+
+        {/* 5️⃣ Radar Chart – Requests by Institution */}
+        <div className="dashboard-container-card">
+          <div className="dashboard-card-header-row">
+            <h3 className="dashboard-container-card-title">
+              Requests by Institution
+            </h3>
+            <button
+              type="button"
+              className="dashboard-card-enhance-btn"
+              onClick={() => openExpanded(panelKey, "institution")}
+              aria-label="Open enhanced view"
+              title="Enhanced view"
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <RadarChart data={institutionCounts}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="institution" />
+              <PolarRadiusAxis />
+              <Radar
+                name="Requests"
+                dataKey="count"
+                stroke={BLUE_COLORS[0]}
+                fill={BLUE_COLORS[1]}
+                fillOpacity={0.5}
+              />
+              <Tooltip />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* 6️⃣ Top Purposes – simple list */}
+        <div className="dashboard-container-card">
+          <div className="dashboard-card-header-row">
+            <h3 className="dashboard-container-card-title">Top Purposes</h3>
+            <button
+              type="button"
+              className="dashboard-card-enhance-btn"
+              onClick={() => openExpanded(panelKey, "purposes")}
+              aria-label="Open enhanced view"
+              title="Enhanced view"
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+          <ul className="dashboard-top-purpose-list">
+            {purposeCounts.map((p) => (
+              <li key={p.purpose} className="dashboard-top-purpose-item">
+                <span className="dashboard-top-purpose-dot" />
+                <span className="dashboard-top-purpose-label">
+                  {p.purpose}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+};
 
   const renderExpandedModal = () => {
     if (!expandedChart) return null;
@@ -764,54 +813,214 @@ function Dashboard() {
     );
   };
 
+  // month & day strings for chip – shows today's date when no filter
+  const today = dayjs();
+  const displayDate = selectedDate || todayRef;
+  const monthLabel = displayDate.format("MMM");
+  const dayLabel = displayDate.format("DD");
+
+  const handleDateChange = (e) => {
+    const value = e.target.value;
+    if (!value) return;
+    const next = dayjs(value);
+    if (next.isValid()) {
+      setSelectedDate(next);
+      setShowDatePicker(false);
+    }
+  };
+
+    const handleToggleDatePicker = () => {
+      if (!showDatePicker) {
+        const base = selectedDate || todayRef;
+        setCalendarMonth(base.month());
+        setCalendarYear(base.year());
+        setCalendarTempDate(selectedDate);
+        setShowDatePicker(true);
+      } else {
+        setShowDatePicker(false);
+      }
+    };
+
+    const handleConfirmDate = () => {
+      if (calendarTempDate) {
+        setSelectedDate(calendarTempDate);
+      }
+      setShowDatePicker(false);
+    };
+
+    const handleClearFilter = () => {
+      setSelectedDate(null);
+      setCalendarTempDate(null);
+      setShowDatePicker(false);
+    };
+
+    // precompute calendar grid info for the current month/year in popup
+    const calendarStart = dayjs()
+      .year(calendarYear)
+      .month(calendarMonth)
+      .date(1);
+    const calendarFirstWeekday = calendarStart.day(); // 0 = Sun
+    const calendarDaysInMonth = calendarStart.daysInMonth();
+    const leadingBlanks = Array.from(
+      { length: calendarFirstWeekday },
+      (_, i) => i
+    );
+    const calendarDayNumbers = Array.from(
+      { length: calendarDaysInMonth },
+      (_, i) => i + 1
+    );
+
   return (
     <div className="dashboard-container">
       {loading ? (
         <div className="dashboard-container-loading">Loading analytics…</div>
       ) : (
         <>
-          {/* 🔘 GLOBAL VIEW SWITCH – top left */}
-          <div className="dashboard-view-toggle">
-            <button
-              type="button"
-              className={`dashboard-view-toggle-btn ${
-                viewMode === "ALL" ? "active" : ""
-              }`}
-              onClick={() => setViewMode("ALL")}
-            >
-              ALL
-            </button>
-            <button
-              type="button"
-              className={`dashboard-view-toggle-btn ${
-                viewMode === "OUTPASS" ? "active" : ""
-              }`}
-              onClick={() => setViewMode("OUTPASS")}
-            >
-              OUTING
-            </button>
-            <button
-              type="button"
-              className={`dashboard-view-toggle-btn ${
-                viewMode === "LEAVE" ? "active" : ""
-              }`}
-              onClick={() => setViewMode("LEAVE")}
-            >
-              LEAVE
-            </button>
+          {/* top bar: left = view toggle, right = date calendar */}
+          <div className="dashboard-topbar">
+            <div className="dashboard-topbar-left">
+              <div className="dashboard-view-toggle">
+                <button
+                  type="button"
+                  className={`dashboard-view-toggle-btn ${
+                    viewMode === "ALL" ? "active" : ""
+                  }`}
+                  onClick={() => setViewMode("ALL")}
+                >
+                  ALL
+                </button>
+                <button
+                  type="button"
+                  className={`dashboard-view-toggle-btn ${
+                    viewMode === "OUTPASS" ? "active" : ""
+                  }`}
+                  onClick={() => setViewMode("OUTPASS")}
+                >
+                  OUTING
+                </button>
+                <button
+                  type="button"
+                  className={`dashboard-view-toggle-btn ${
+                    viewMode === "LEAVE" ? "active" : ""
+                  }`}
+                  onClick={() => setViewMode("LEAVE")}
+                >
+                  LEAVE
+                </button>
+              </div>
+            </div>
+
+            <div className="dashboard-topbar-right">
+              {/* calendar chip + popover */}
+              <div className="dashboard-date-wrapper">
+                <button
+                  type="button"
+                  className="dashboard-date-chip"
+                  onClick={handleToggleDatePicker}
+                >
+                  <span className="dashboard-date-chip-month">{monthLabel}</span>
+                  <span className="dashboard-date-chip-day">{dayLabel}</span>
+                </button>
+
+                {showDatePicker && (
+                  <div className="dashboard-date-popover">
+                    <div className="dashboard-calendar-card">
+                      <div className="dashboard-calendar-header">
+                        <div className="dashboard-calendar-title">Select Date</div>
+                        <div className="dashboard-calendar-select-row">
+                          <select
+                            className="dashboard-calendar-select"
+                            value={calendarMonth}
+                            onChange={(e) => setCalendarMonth(Number(e.target.value))}
+                          >
+                            {MONTH_NAMES.map((m, idx) => (
+                              <option value={idx} key={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="dashboard-calendar-select"
+                            value={calendarYear}
+                            onChange={(e) => setCalendarYear(Number(e.target.value))}
+                          >
+                            {yearOptions.map((y) => (
+                              <option key={y} value={y}>
+                                {y}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="dashboard-calendar-grid">
+                        {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => (
+                          <div key={d} className="dashboard-calendar-weekday">
+                            {d}
+                          </div>
+                        ))}
+
+                        {leadingBlanks.map((idx) => (
+                          <div
+                            key={`blank-${idx}`}
+                            className="dashboard-calendar-day-cell empty"
+                          />
+                        ))}
+
+                        {calendarDayNumbers.map((dayNum) => {
+                          const dateObj = dayjs()
+                            .year(calendarYear)
+                            .month(calendarMonth)
+                            .date(dayNum);
+
+                          const isSelected = isSameDay(
+                            calendarTempDate || selectedDate,
+                            dateObj
+                          );
+
+                          const isToday = isSameDay(todayRef, dateObj);
+
+                          return (
+                            <button
+                              type="button"
+                              key={dayNum}
+                              className={`dashboard-calendar-day-btn
+                                ${isToday ? "today" : ""}
+                                ${isSelected ? "selected" : ""}`}
+                              onClick={() => setCalendarTempDate(dateObj)}
+                            >
+                              {String(dayNum).padStart(2, "0")}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="dashboard-calendar-footer">
+                        <button
+                          type="button"
+                          className="dashboard-calendar-confirm"
+                          onClick={handleConfirmDate}
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-calendar-clear"
+                          onClick={handleClearFilter}
+                        >
+                          Clear Filter
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* layout changes based on viewMode */}
           {viewMode === "ALL" && (
-            <div
-              className="dashboard-split-layout"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "24px",
-                alignItems: "flex-start",
-              }}
-            >
+            <div className="dashboard-split-layout">
               {renderPanel(
                 "outpass",
                 "Outpass Dashboard",
