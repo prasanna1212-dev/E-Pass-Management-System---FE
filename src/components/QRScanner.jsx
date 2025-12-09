@@ -411,7 +411,7 @@ const QRScanner = () => {
     }
     
     // Format with proper timezone - this will correctly convert UTC to IST
-    return date.toLocaleString("en-US", {
+    return date.toLocaleString("en-IN", {
       month: "short",
       day: "numeric",
       year: "numeric",
