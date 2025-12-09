@@ -24,7 +24,7 @@ const QRScanner = () => {
   const [outpassData, setOutpassData] = useState(null);
   const [currentTime, setCurrentTime] = useState("");
   const [studentImage, setStudentImage] = useState(null);
-
+  
   // 🚀 NEW: Entry/Exit Modal States
   const [exitModalVisible, setExitModalVisible] = useState(false);
   const [entryModalVisible, setEntryModalVisible] = useState(false);
@@ -33,11 +33,35 @@ const QRScanner = () => {
 
   const inputRef = useRef(null);
 
+ const getUserInfo = () => {
+    const userDomainJoinUpn = localStorage.getItem("domain_join_upn");
+    const userEmail = localStorage.getItem("email");
+    
+    // Safely extract name before '@' and capitalize
+    const extractName = (upn) => {
+      if (!upn) return 'Unknown User';
+      const namePart = upn.split('@')[0]; // "john.doe"
+      return namePart
+        .split('.') // split by dot if present
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    };
+    
+    const displayName = extractName(userDomainJoinUpn);
+    
+    return {
+      name: displayName,
+      email: userEmail || userDomainJoinUpn || 'unknown@domain.com',
+      upn: userDomainJoinUpn
+    };
+  };
+  const currentUser = getUserInfo();
+  
   // 🕒 Live clock updater
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const formatted = now.toLocaleString("en-US", {
+      const formatted = now.toLocaleString("en-IN", {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -45,7 +69,6 @@ const QRScanner = () => {
         minute: "2-digit",
         second: "2-digit",
         hour12: true,
-        timeZone: "Asia/Kolkata",
       });
       setCurrentTime(formatted);
     };
@@ -100,7 +123,7 @@ const QRScanner = () => {
 
     const now = new Date();
     const validDate = new Date(validUntil);
-
+    
     // Check if the valid date is today
     const isToday = (
       now.getFullYear() === validDate.getFullYear() &&
@@ -112,11 +135,11 @@ const QRScanner = () => {
     if (isToday && originalStatus === "Expired") {
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
-
+      
       // Convert current time to minutes for easier comparison
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       const ninePM = 21 * 60; // 9 PM in minutes (21:00)
-
+      
       // If current time is before 9 PM, allow as valid
       if (currentTimeInMinutes < ninePM) {
         return "Valid";
@@ -141,14 +164,25 @@ const QRScanner = () => {
       setLoading(true);
       setOutpassData(null);
       setStudentImage(null);
-
-      const res = await axios.get(
-        `${API_BASE_URL}/outpass-route/outpass/validate/${idToCheck}`
+ const userInfo = getUserInfo();
+     const res = await axios.get(
+        `${API_BASE_URL}/outpass-route/outpass/validate/${idToCheck}`,
+        {
+          params: {
+            scanner_name: userInfo.name,
+            scanner_email: userInfo.email
+          },
+          headers: {
+            'X-Scanner-Name': userInfo.name,
+            'X-Scanner-Email': userInfo.email,
+            'X-Scanner-UPN': userInfo.upn
+          }
+        }
       );
 
       // Apply enhanced status logic
       const enhancedStatus = determineOutpassStatus(res.data.status, res.data.valid_until);
-
+      
       const enhancedData = {
         ...res.data,
         status: enhancedStatus
@@ -196,7 +230,7 @@ const QRScanner = () => {
   const handleEntryExitLogic = (data, scannedIdentifier) => {
     const scanCount = data.details?.scan_count || 0;
     const requestType = data.request_type; // 'outpass' or 'leave'
-
+    
     // 🚀 NEW: Determine the correct identifier based on request type
     let identifier;
     if (requestType === 'outpass') {
@@ -207,7 +241,7 @@ const QRScanner = () => {
       // Fallback to scanned identifier
       identifier = scannedIdentifier;
     }
-
+    
     if (scanCount === 0) {
       // First scan - Student wants to exit campus
       setPendingAction({
@@ -241,21 +275,25 @@ const QRScanner = () => {
 
     try {
       setActionLoading(true);
-
-      const response = await axios.post(
+            const userInfo = getUserInfo();
+     const response = await axios.post(
         `${API_BASE_URL}/outpass-route/outpass/confirm-exit/${pendingAction.identifier}`,
         {
           outpass_id: pendingAction.outpassId,
-          request_type: pendingAction.requestType // Send request type to backend
+          request_type: pendingAction.requestType,
+          // 🔥 NEW: Include user info in action requests
+          scanner_name: userInfo.name,
+          scanner_email: userInfo.email
         }
       );
+
 
       if (response.data.success) {
         toast.success("Campus exit confirmed! Scan again when returning.");
         setExitModalVisible(false);
         setPendingAction(null);
         setOutpassData(null); // Clear current outpass data
-
+        
         // DON'T auto-refresh - wait for next scan
       } else {
         toast.error(response.data.message || "Failed to confirm exit");
@@ -279,12 +317,15 @@ const QRScanner = () => {
 
     try {
       setActionLoading(true);
-
-      const response = await axios.post(
+      const userInfo = getUserInfo();
+     const response = await axios.post(
         `${API_BASE_URL}/outpass-route/outpass/confirm-entry/${pendingAction.identifier}`,
         {
           outpass_id: pendingAction.outpassId,
-          request_type: pendingAction.requestType // Send request type to backend
+          request_type: pendingAction.requestType,
+          // 🔥 NEW: Include user info in action requests
+          scanner_name: userInfo.name,
+          scanner_email: userInfo.email
         }
       );
 
@@ -293,7 +334,7 @@ const QRScanner = () => {
         setEntryModalVisible(false);
         setPendingAction(null);
         setOutpassData(null); // Clear current outpass data
-
+        
         // DON'T auto-refresh - ready for next scan
       } else {
         toast.error(response.data.message || "Failed to confirm entry");
@@ -316,7 +357,7 @@ const QRScanner = () => {
     setExitModalVisible(false);
     setEntryModalVisible(false);
     setPendingAction(null);
-
+    
     // Clear input and refocus
     setHostelId("");
     if (inputRef.current) {
@@ -351,41 +392,41 @@ const QRScanner = () => {
     };
   }, [studentImage]);
 
+  const normalizeToLocal = (dateStr) => {
+  if (!dateStr) return null;
+  // if backend sends ISO with Z (UTC), drop Z so browser treats as local time
+  return dateStr.endsWith("Z") ? dateStr.slice(0, -1) : dateStr;
+};
   const formatDateTime = (dateStr) => {
-    if (!dateStr) return "N/A";
-
-    // Use the same method as your other components
-    return new Date(
-      String(dateStr).replace("Z", "")
-    ).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    });
-  };
+  if (!dateStr) return "N/A";
   
-  const formatCampusDateTime = (dateStr) => {
-    if (!dateStr) return "N/A";
-
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return "N/A";
-
+  try {
+    // DON'T remove the "Z" - let JavaScript handle UTC properly
+    const date = new Date(dateStr); // Keep the original ISO string with Z
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date:', dateStr);
+      return "N/A";
+    }
+    
+    // Format with proper timezone - this will correctly convert UTC to IST
     return date.toLocaleString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
+      second: "2-digit", 
       hour12: true,
-      timeZone: "Asia/Kolkata",
+      timeZone: "Asia/Kolkata", // This works correctly with UTC input
     });
-  };
+  } catch (error) {
+    console.error('Date formatting error:', error, 'Input:', dateStr);
+    return "N/A";
+  }
+};
+  
 
   const formatDateOnly = (dateStr) => {
     if (!dateStr) return "N/A";
@@ -446,7 +487,18 @@ const QRScanner = () => {
 
         <div className="qrscanner-time">{currentTime}</div>
       </div>
-
+  <div style={{ 
+        background: '#f0f9ff', 
+        border: '1px solid #bae7ff',
+        borderRadius: '6px',
+        padding: '8px 16px',
+        marginBottom: '16px',
+        textAlign: 'center'
+      }}>
+        <Text style={{ fontSize: '13px', color: '#1890ff' }}>
+          <UserOutlined /> Scanner: <strong>{currentUser.name}</strong> ({currentUser.email})
+        </Text>
+      </div>
       <Text type="secondary" className="qrscanner-subtext">
         Scan the QR from your email or manually enter your Hostel ID below.
       </Text>
@@ -517,19 +569,19 @@ const QRScanner = () => {
               <p>
                 <strong>Valid Until:</strong> {formatDateTime(outpassData.valid_until)}
               </p>
-
+              
               {/* 🚀 NEW: Show Exit/Entry Times if available */}
               {outpassData.details?.exit_time && (
                 <p>
-                  <strong>Campus Exit:</strong>{formatCampusDateTime(outpassData.details.exit_time)}
+                  <strong>Campus Exit:</strong> {formatDateTime(outpassData.details.exit_time)}
                 </p>
               )}
               {outpassData.details?.entry_time && (
                 <p>
-                  <strong>Campus Entry:</strong> {formatCampusDateTime(outpassData.details.entry_time)}
+                  <strong>Campus Entry:</strong> {formatDateTime(outpassData.details.entry_time)}
                 </p>
               )}
-
+              
               {/* 🚀 NEW: Show request type badge */}
               <div style={{ marginTop: '8px' }}>
                 <span style={{
@@ -618,11 +670,11 @@ const QRScanner = () => {
       >
         {pendingAction && (
           <div>
-            <div style={{
-              backgroundColor: '#e6f7ff',
-              border: '1px solid #91d5ff',
-              borderRadius: '6px',
-              padding: '16px',
+            <div style={{ 
+              backgroundColor: '#e6f7ff', 
+              border: '1px solid #91d5ff', 
+              borderRadius: '6px', 
+              padding: '16px', 
               marginBottom: '16px',
               textAlign: 'center'
             }}>
@@ -657,9 +709,9 @@ const QRScanner = () => {
               </Text>
             </div>
 
-            <div style={{
-              backgroundColor: '#f6f6f6',
-              padding: '12px',
+            <div style={{ 
+              backgroundColor: '#f6f6f6', 
+              padding: '12px', 
               borderRadius: '4px',
               textAlign: 'center'
             }}>
@@ -693,11 +745,11 @@ const QRScanner = () => {
       >
         {pendingAction && (
           <div>
-            <div style={{
-              backgroundColor: '#f6ffed',
-              border: '1px solid #b7eb8f',
-              borderRadius: '6px',
-              padding: '16px',
+            <div style={{ 
+              backgroundColor: '#f6ffed', 
+              border: '1px solid #b7eb8f', 
+              borderRadius: '6px', 
+              padding: '16px', 
               marginBottom: '16px',
               textAlign: 'center'
             }}>
@@ -732,9 +784,9 @@ const QRScanner = () => {
               </Text>
             </div>
 
-            <div style={{
-              backgroundColor: '#f6f6f6',
-              padding: '12px',
+            <div style={{ 
+              backgroundColor: '#f6f6f6', 
+              padding: '12px', 
               borderRadius: '4px',
               textAlign: 'center'
             }}>
