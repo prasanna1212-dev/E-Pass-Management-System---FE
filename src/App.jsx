@@ -1,6 +1,7 @@
 import './App.css'
 import LoginDashboard from "./components/LoginDashboard"
 import LandingPage from "./components/LandingPage"
+import WardenLandingPage from "./components/WardenLandingPage"
 import AdminLandingPage from './components/AdminLandingPage'
 import {BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import NetworkStatusChecker from "./components/NetworkStatusChecker";
@@ -18,6 +19,7 @@ function App() {
           <Route path="/" element={<LoginDashboard />} />
           <Route path="/user-dashboard" element={<LandingPage />} />
           <Route path="/admin-dashboard" element={<AdminLandingPage />} />
+          <Route path="/warden-dashboard" element={<WardenLandingPage />} />
           <Route path="/renewal-request/:id" element={<RenewalForm />} />
           {/* <Route path="/scanner" element={<QRScanner />} /> */}
         </Routes>
