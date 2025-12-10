@@ -93,92 +93,108 @@ const [activePassLoading, setActivePassLoading] = useState(false);
 const [selectedPassesToExpire, setSelectedPassesToExpire] = useState([]);
 const [expireAllPasses, setExpireAllPasses] = useState(false);
 const [expireMode, setExpireMode] = useState('none');
+const [hostelFilter, setHostelFilter] = useState("All");
+
+
+const handleHostelChange = (value) => {
+  setHostelFilter(value);
+  applyFilters(data, search, dateRange, statusFilter, permissionFilter, value);
+};
 
   // 🚀 OPTIMIZED: Fast fetch without images
-  const fetchOutpassData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
+const fetchOutpassData = useCallback(async () => {
+  setLoading(true);
+  try {
+    const res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/outpass`);
 
-      if (!res.ok) throw new Error("Failed to fetch data");
+    if (!res.ok) throw new Error("Failed to fetch data");
 
-      const result = await res.json();
-      // Sort: newest updated/created at the top
-      const sorted = [...result].sort((a, b) => {
-        const aTime = a.updated_at || a.created_at;
-        const bTime = b.updated_at || b.created_at;
-        return dayjs(bTime).valueOf() - dayjs(aTime).valueOf();
-      });
-      setData(sorted);
+    const result = await res.json();
+    // Sort: newest updated/created at the top
+    const sorted = [...result].sort((a, b) => {
+      const aTime = a.updated_at || a.created_at;
+      const bTime = b.updated_at || b.created_at;
+      return dayjs(bTime).valueOf() - dayjs(aTime).valueOf();
+    });
+    setData(sorted);
 
-      // Apply all current filters
-      let temp = sorted;
-      const searchTerm = search ? search.toLowerCase() : "";
+    // Apply all current filters
+    let temp = sorted;
+    const searchTerm = search ? search.toLowerCase() : "";
 
-      // 1. Text Search Filter
+    // 1. Text Search Filter
+    temp = temp.filter(
+      (item) =>
+        item.name.toLowerCase().includes(searchTerm) ||
+        (item.hostel && item.hostel.toLowerCase().includes(searchTerm)) ||
+        item.inst_name.toLowerCase().includes(searchTerm) ||
+        (item.course && item.course.toLowerCase().includes(searchTerm)) ||
+        item.purpose.toLowerCase().includes(searchTerm) ||
+        (item.display_id &&
+          item.display_id.toLowerCase().includes(searchTerm)) ||
+        (item.hostel_id && item.hostel_id.toLowerCase().includes(searchTerm))
+    );
+
+    // 2. Date Range Filter
+    if (dateRange && dateRange.length === 2) {
+      const [start, end] = dateRange;
       temp = temp.filter(
         (item) =>
-          item.name.toLowerCase().includes(searchTerm) ||
-          (item.hostel && item.hostel.toLowerCase().includes(searchTerm)) ||
-          item.inst_name.toLowerCase().includes(searchTerm) ||
-          (item.course && item.course.toLowerCase().includes(searchTerm)) ||
-          item.purpose.toLowerCase().includes(searchTerm) ||
-          (item.display_id &&
-            item.display_id.toLowerCase().includes(searchTerm)) ||
-          (item.hostel_id && item.hostel_id.toLowerCase().includes(searchTerm))
+          dayjs(item.date_from).toDate() >= start.toDate() &&
+          dayjs(item.date_to).toDate() <= end.toDate()
       );
-
-      // 2. Date Range Filter
-      if (dateRange && dateRange.length === 2) {
-        const [start, end] = dateRange;
-        temp = temp.filter(
-          (item) =>
-            dayjs(item.date_from).toDate() >= start.toDate() &&
-            dayjs(item.date_to).toDate() <= end.toDate()
-        );
-      }
-
-      // 3. Status Filter
-      if (statusFilter && statusFilter !== "All") {
-        temp = temp.filter((item) => item.status === statusFilter);
-      }
-
-      // 4. Permission Filter
-      if (
-        permissionFilter &&
-        permissionFilter !== "All" &&
-        temp.some((item) => item.permission)
-      ) {
-        temp = temp.filter((item) => item.permission === permissionFilter);
-      }
-
-      setFilteredData(temp);
-
-      // Handle pagination reset
-      const totalPages = Math.ceil(temp.length / pageSize);
-      if (currentPage > totalPages && totalPages > 0) {
-        setCurrentPage(1);
-      } else if (temp.length > 0 && currentPage === 0) {
-        setCurrentPage(1);
-      }
-    } catch (err) {
-      console.error("Data fetching error:", err);
-      notification.error({
-        message: "Data Fetch Error",
-        description: "Failed to load outpass/leave data from the server.",
-      });
-    } finally {
-      setLoading(false);
     }
-  }, [
-    search,
-    dateRange,
-    statusFilter,
-    permissionFilter,
-    currentPage,
-    pageSize,
-  ]);
 
+    // 3. Status Filter
+    if (statusFilter && statusFilter !== "All") {
+      temp = temp.filter((item) => item.status === statusFilter);
+    }
+
+    // 4. Permission Filter
+    if (
+      permissionFilter &&
+      permissionFilter !== "All" &&
+      temp.some((item) => item.permission)
+    ) {
+      temp = temp.filter((item) => item.permission === permissionFilter);
+    }
+
+    // 🆕 5. HOSTEL FILTER
+    if (hostelFilter && hostelFilter !== "All") {
+      temp = temp.filter((item) => item.hostel === hostelFilter);
+    }
+
+    setFilteredData(temp);
+
+    // Handle pagination reset
+    const totalPages = Math.ceil(temp.length / pageSize);
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    } else if (temp.length > 0 && currentPage === 0) {
+      setCurrentPage(1);
+    }
+  } catch (err) {
+    console.error("Data fetching error:", err);
+    notification.error({
+      message: "Data Fetch Error",
+      description: "Failed to load outpass/leave data from the server.",
+    });
+  } finally {
+    setLoading(false);
+  }
+}, [
+  search,
+  dateRange,
+  statusFilter,
+  permissionFilter,
+  hostelFilter,  // 🆕 ADD THIS DEPENDENCY
+  currentPage,
+  pageSize,
+]);
+const getUniqueHostels = () => {
+  const hostels = [...new Set(data.map(item => item.hostel).filter(Boolean))];
+  return hostels.sort();
+};
   const getUserDetails = () => {
   const userDomainJoinUpn = localStorage.getItem("domain_join_upn");
   
@@ -243,77 +259,83 @@ const [expireMode, setExpireMode] = useState('none');
 
   // Apply filters with all filter types
   const applyFilters = useCallback(
-    (
-      currentData,
-      currentSearch,
-      currentRange,
-      currentStatus,
-      currentPermission
-    ) => {
-      let temp = [...currentData].sort((a, b) => {
-        const aTime = a.updated_at || a.created_at;
-        const bTime = b.updated_at || b.created_at;
-        return dayjs(bTime).valueOf() - dayjs(aTime).valueOf();
-      });
-      const searchTerm = currentSearch ? currentSearch.toLowerCase() : "";
+  (
+    currentData,
+    currentSearch,
+    currentRange,
+    currentStatus,
+    currentPermission,
+    currentHostel  // 🆕 ADD THIS PARAMETER
+  ) => {
+    let temp = [...currentData].sort((a, b) => {
+      const aTime = a.updated_at || a.created_at;
+      const bTime = b.updated_at || b.created_at;
+      return dayjs(bTime).valueOf() - dayjs(aTime).valueOf();
+    });
+    const searchTerm = currentSearch ? currentSearch.toLowerCase() : "";
 
+    temp = temp.filter(
+      (item) =>
+        item.name.toLowerCase().includes(searchTerm) ||
+        (item.hostel && item.hostel.toLowerCase().includes(searchTerm)) ||
+        item.inst_name.toLowerCase().includes(searchTerm) ||
+        (item.course && item.course.toLowerCase().includes(searchTerm)) ||
+        item.purpose.toLowerCase().includes(searchTerm) ||
+        (item.display_id &&
+          item.display_id.toLowerCase().includes(searchTerm)) ||
+        (item.hostel_id && item.hostel_id.toLowerCase().includes(searchTerm))
+    );
+
+    if (currentRange && currentRange.length === 2) {
+      const [start, end] = currentRange;
       temp = temp.filter(
         (item) =>
-          item.name.toLowerCase().includes(searchTerm) ||
-          (item.hostel && item.hostel.toLowerCase().includes(searchTerm)) ||
-          item.inst_name.toLowerCase().includes(searchTerm) ||
-          (item.course && item.course.toLowerCase().includes(searchTerm)) ||
-          item.purpose.toLowerCase().includes(searchTerm) ||
-          (item.display_id &&
-            item.display_id.toLowerCase().includes(searchTerm)) ||
-          (item.hostel_id && item.hostel_id.toLowerCase().includes(searchTerm))
+          dayjs(item.date_from).toDate() >= start.toDate() &&
+          dayjs(item.date_to).toDate() <= end.toDate()
       );
+    }
 
-      if (currentRange && currentRange.length === 2) {
-        const [start, end] = currentRange;
-        temp = temp.filter(
-          (item) =>
-            dayjs(item.date_from).toDate() >= start.toDate() &&
-            dayjs(item.date_to).toDate() <= end.toDate()
-        );
-      }
+    if (currentStatus && currentStatus !== "All") {
+      temp = temp.filter((item) => item.status === currentStatus);
+    }
 
-      if (currentStatus && currentStatus !== "All") {
-        temp = temp.filter((item) => item.status === currentStatus);
-      }
+    if (
+      currentPermission &&
+      currentPermission !== "All" &&
+      temp.some((item) => item.permission)
+    ) {
+      temp = temp.filter((item) => item.permission === currentPermission);
+    }
 
-      if (
-        currentPermission &&
-        currentPermission !== "All" &&
-        temp.some((item) => item.permission)
-      ) {
-        temp = temp.filter((item) => item.permission === currentPermission);
-      }
+    // 🆕 ADD HOSTEL FILTER LOGIC
+    if (currentHostel && currentHostel !== "All") {
+      temp = temp.filter((item) => item.hostel === currentHostel);
+    }
 
-      setFilteredData(temp);
-      setCurrentPage(1);
-    },
-    []
-  );
+    setFilteredData(temp);
+    setCurrentPage(1);
+  },
+  []
+);
 
   const handleSearch = (value) => {
     setSearch(value);
-    applyFilters(data, value, dateRange, statusFilter, permissionFilter);
+    applyFilters(data, value, dateRange, statusFilter, permissionFilter,hostelFilter);
   };
 
   const handleDateChange = (dates) => {
     setDateRange(dates);
-    applyFilters(data, search, dates, statusFilter, permissionFilter);
+    applyFilters(data, search, dates, statusFilter, permissionFilter,hostelFilter);
   };
 
   const handleStatusChange = (value) => {
     setStatusFilter(value);
-    applyFilters(data, search, dateRange, value, permissionFilter);
+    applyFilters(data, search, dateRange, value, permissionFilter,hostelFilter);
   };
 
   const handlePermissionChange = (value) => {
     setPermissionFilter(value);
-    applyFilters(data, search, dateRange, statusFilter, value);
+    applyFilters(data, search, dateRange, statusFilter, value,hostelFilter);
   };
 
   const handlePaginationChange = (page, size) => {
@@ -938,7 +960,7 @@ const formatActivePassDisplay = (pass) => {
 
   // Check if data has permission field to show permission filter
   const hasPermissionData = data.some((item) => item.permission);
-
+const hasHostelData = data.some((item) => item.hostel);  // 🆕 ADD THIS IF YOU WANT CONDITIONAL RENDERING
   // Unified columns with conditional rendering
   const columns = [
     {
@@ -2456,6 +2478,17 @@ return (
 
         {/* Status Filter */}
         <Select
+  value={hostelFilter}
+  style={{ width: 150, marginLeft: 10 }}
+  onChange={handleHostelChange}
+  placeholder="Hostel"
+>
+  <Option value="All">All Hostels</Option>
+  {getUniqueHostels().map(hostel => (
+    <Option key={hostel} value={hostel}>{hostel}</Option>
+  ))}
+</Select>
+        <Select
           value={statusFilter}
           style={{ width: 150, marginLeft: 10 }}
           onChange={handleStatusChange}
@@ -2491,6 +2524,7 @@ return (
             setDateRange([]);
             setStatusFilter("All");
             setPermissionFilter("All");
+            setHostelFilter("All");  
             applyFilters(data, "", [], "All", "All");
           }}
           style={{ marginLeft: 10, color: "red" }}
