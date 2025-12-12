@@ -140,6 +140,8 @@ function UserLoginModal({ onSignUpClick, redirectPath, onLoginSuccess }) {
         <div className="login-username-wrapper">
           <input
             type="text"
+            name="username"
+            autoComplete="username"
             placeholder="Username"
             className="login-input"
             value={emailOrdomain_join_upn}
@@ -161,6 +163,8 @@ function UserLoginModal({ onSignUpClick, redirectPath, onLoginSuccess }) {
         <div className="login-password-wrapper">
           <input
             type={passwordVisible ? "text" : "password"}
+            name="password"
+            autoComplete="current-password"
             placeholder="Password"
             className="login-input"
             value={password}
