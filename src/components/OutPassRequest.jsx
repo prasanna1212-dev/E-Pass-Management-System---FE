@@ -783,60 +783,63 @@ const formatActivePassDisplay = (pass) => {
 
   // Handle rejection (works for both outpass and leave)
   const handleRejectionSubmit = async () => {
-    try {
-      const values = await rejectionForm.validateFields();
-      setRejectionLoading(true);
+  try {
+    const values = await rejectionForm.validateFields();
+    setRejectionLoading(true);
+    
+    // ✅ ADD THIS LINE - Get displayName properly
+    const { displayName } = getUserDetails(); 
 
-      const isLeaveRequest =
-        rejectionTarget.is_leave_request ||
-        rejectionTarget.permission === "leave";
-      let endpoint;
+    const isLeaveRequest =
+      rejectionTarget.is_leave_request ||
+      rejectionTarget.permission === "leave";
+    let endpoint;
 
-      if (isLeaveRequest) {
-        endpoint = `${API_BASE_URL}/outpass-route/leave/reject/${rejectionTarget.id}`;
-      } else {
-        endpoint = `${API_BASE_URL}/outpass-route/outpass/reject/${rejectionTarget.id}`;
-      }
-
-      let response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reason: values.reason.trim() || "No specific reason provided.",
-           reviewed_by: displayName 
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        notification.success({
-          message: `${
-            isLeaveRequest ? "Leave" : "Outpass"
-          } Rejected Successfully`,
-          description: `Rejection processed for ${rejectionTarget.name}.`,
-        });
-
-        setRejectionModalVisible(false);
-        setRejectionTarget(null);
-        await fetchOutpassData();
-        setCurrentPage(1);
-      } else {
-        notification.error({
-          message: "Rejection Failed",
-          description: result.message || "Failed to reject request.",
-        });
-      }
-    } catch (error) {
-      console.error("Error during rejection process:", error);
-      notification.error({
-        message: "Network Error",
-        description: "Network or server error while rejecting request.",
-      });
-    } finally {
-      setRejectionLoading(false);
+    if (isLeaveRequest) {
+      endpoint = `${API_BASE_URL}/outpass-route/leave/reject/${rejectionTarget.id}`;
+    } else {
+      endpoint = `${API_BASE_URL}/outpass-route/outpass/reject/${rejectionTarget.id}`;
     }
-  };
+
+    let response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: values.reason.trim() || "No specific reason provided.",
+         reviewed_by: displayName  // ✅ Now properly defined
+      }),
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      notification.success({
+        message: `${
+          isLeaveRequest ? "Leave" : "Outpass"
+        } Rejected Successfully`,
+        description: `Rejection processed for ${rejectionTarget.name}.`,
+      });
+
+      setRejectionModalVisible(false);
+      setRejectionTarget(null);
+      await fetchOutpassData();
+      setCurrentPage(1);
+    } else {
+      notification.error({
+        message: "Rejection Failed",
+        description: result.message || "Failed to reject request.",
+      });
+    }
+  } catch (error) {
+    console.error("Error during rejection process:", error);
+    notification.error({
+      message: "Network Error",
+      description: "Network or server error while rejecting request.",
+    });
+  } finally {
+    setRejectionLoading(false);
+  }
+};
 
   const handleRejectionCancel = () => {
     setRejectionModalVisible(false);
