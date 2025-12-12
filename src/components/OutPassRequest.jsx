@@ -429,6 +429,9 @@ const handleRejectRenewal = async (id) => {
   );
   if (!confirmReject) return;
 
+  // ✅ ADD THIS LINE - Get displayName properly
+  const { displayName } = getUserDetails(); 
+
   const loadingToastId = toast.loading("Rejecting renewal...");
 
   try {
@@ -440,7 +443,7 @@ const handleRejectRenewal = async (id) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          reviewed_by: displayName, // 🆕 Added field
+          reviewed_by: displayName, // ✅ Now properly defined
         }),
       }
     );
