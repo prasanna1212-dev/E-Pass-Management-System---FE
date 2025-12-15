@@ -3148,6 +3148,7 @@ return (
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
+          timeZone: "Asia/Kolkata",
         })}
       </span>
     </Descriptions.Item>
@@ -3202,6 +3203,7 @@ return (
                   minute: "2-digit",
                   second: "2-digit",
                   hour12: true,
+                  timeZone: "Asia/Kolkata",
                 })}
               </span>
             </p>
