@@ -3140,16 +3140,16 @@ return (
       </Descriptions.Item>
     )}
     <Descriptions.Item label={`${selectedItem.status === "Rejected" ? "Rejected" : "Processed"} On`}>
-      <span style={{ color: "#666", fontWeight: 500 }}>
-        {new Date(selectedItem.updated_at).toLocaleString("en-IN", {
+      <span style={{ color: "#1e293b", fontWeight: 600 }}>
+        {selectedItem.updated_at ? new Date(selectedItem.updated_at).toLocaleString("en-IN", {
+          day: "2-digit",
           month: "short",
-          day: "numeric",
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
           timeZone: "Asia/Kolkata",
-        })}
+        }) : "N/A"}
       </span>
     </Descriptions.Item>
   </Descriptions>
@@ -3194,18 +3194,18 @@ return (
               }}
             >
               
-            Requested:&nbsp;
-              <span style={{ fontWeight: "600" }}>
-                {new Date(selectedItem.created_at).toLocaleString("en-IN", {
+            Requested on:&nbsp;
+              <span style={{ fontWeight: "700", color: "#334155" }}>
+                {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleString("en-IN", {
+                  day: "2-digit",
                   month: "short",
-                  day: "numeric",
                   year: "numeric",
                   hour: "2-digit",
                   minute: "2-digit",
                   second: "2-digit",
                   hour12: true,
                   timeZone: "Asia/Kolkata",
-                })}
+                }) : "N/A"}
               </span>
             </p>
           </div>
