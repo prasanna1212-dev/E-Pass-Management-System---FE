@@ -3140,20 +3140,17 @@ return (
       </Descriptions.Item>
     )}
     <Descriptions.Item label={`${selectedItem.status === "Rejected" ? "Rejected" : "Processed"} On`}>
-        <span style={{ color: "#666", fontWeight: 500 }}>
-            {new Date(
-                // CORRECTED: Append IST offset (+05:30) to force interpretation as IST
-                selectedItem.updated_at.replace(' ', 'T') + '+05:30' 
-            ).toLocaleString("en-IN", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true,
-                timeZone: "Asia/Kolkata", 
-            })}
-        </span>
+      <span style={{ color: "#666", fontWeight: 500 }}>
+        {new Date(selectedItem.updated_at).toLocaleString("en-IN", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+          timeZone: "Asia/Kolkata",
+        })}
+      </span>
     </Descriptions.Item>
   </Descriptions>
 )}
@@ -3196,22 +3193,20 @@ return (
                 textAlign: "center",
               }}
             >
-              Requested:&nbsp;
-                <span style={{ fontWeight: "600" }}>
-                    {new Date(
-                        // CORRECTED: Append IST offset (+05:30) to force interpretation as IST
-                        selectedItem.created_at.replace(' ', 'T') + '+05:30'
-                    ).toLocaleString("en-IN", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                        hour12: true,
-                        timeZone: "Asia/Kolkata",
-                    })}
-                </span>
+              
+            Requested:&nbsp;
+              <span style={{ fontWeight: "600" }}>
+                {new Date(selectedItem.created_at).toLocaleString("en-IN", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  hour12: true,
+                  timeZone: "Asia/Kolkata",
+                })}
+              </span>
             </p>
           </div>
         )}
