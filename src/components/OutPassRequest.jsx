@@ -3141,7 +3141,7 @@ return (
     )}
     <Descriptions.Item label={`${selectedItem.status === "Rejected" ? "Rejected" : "Processed"} On`}>
       <span style={{ color: "#666", fontWeight: 500 }}>
-        {new Date(selectedItem.updated_at).toLocaleString("en-US", {
+        {new Date(selectedItem.updated_at).toLocaleString("en-IN", {
           month: "short",
           day: "numeric",
           year: "numeric",
@@ -3195,7 +3195,7 @@ return (
             >
               Requested:&nbsp;
               <span style={{ fontWeight: "600" }}>
-                {new Date(selectedItem.created_at).toLocaleString("en-US", {
+                {new Date(selectedItem.created_at).toLocaleString("en-IN", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
