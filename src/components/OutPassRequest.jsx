@@ -3139,7 +3139,7 @@ return (
         </span>
       </Descriptions.Item>
     )}
-    <Descriptions.Item label={`${selectedItem.status === "Rejected" ? "Rejected" : "Processed"} On`}>
+    <Descriptions.Item label={`${selectedItem.status === "Rejected" ? "Rejected" : "Last Updated at"} On`}>
       <span style={{ color: "#1e293b", fontWeight: 600 }}>
         {selectedItem.updated_at ? new Date(selectedItem.updated_at).toLocaleString("en-IN", {
           day: "2-digit",
