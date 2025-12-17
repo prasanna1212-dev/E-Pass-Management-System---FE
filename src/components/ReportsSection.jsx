@@ -1353,7 +1353,7 @@ const ReportsSection = () => {
 
         setLoadingUsers(true);
         try {
-            const response = await fetch('http://172.30.6.13:5059/api/escalation-masters/getinfo');
+            const response = await fetch(`${API_BASE_URL}/escalation-masters/getinfo`);
             if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
             const users = await response.json();
