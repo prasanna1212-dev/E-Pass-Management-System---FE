@@ -91,7 +91,7 @@ const { Panel } = Collapse;
 const { Step } = Steps;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const POLLING_INTERVAL = 30000;
+const POLLING_INTERVAL = 300000;
 
 // Extend dayjs with isBetween plugin
 dayjs.extend(isBetween);
