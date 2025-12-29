@@ -20,8 +20,9 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
+
 } from "recharts";
-import { Maximize2 } from "lucide-react";
+import { Maximize2 ,AlertTriangle, Clock, Users, ChevronRight} from "lucide-react";
 import "../styles/Dashboard.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -67,7 +68,9 @@ function Dashboard() {
   const [calendarMonth, setCalendarMonth] = useState(todayRef.month()); // 0-11
   const [calendarYear, setCalendarYear] = useState(todayRef.year());
   const [calendarTempDate, setCalendarTempDate] = useState(null);
-
+const [lateEntries, setLateEntries] = useState([]);
+const [lateEntriesLoading, setLateEntriesLoading] = useState(false);
+const [showLateEntriesModal, setShowLateEntriesModal] = useState(false);
   // which chart is in "enhanced" view
   const [expandedChart, setExpandedChart] = useState(null);
   // expandedChart = { panelKey: "outpass" | "leave", chartKey: "status" | "hostel" | "timeline" | "duration" | "institution" | "purposes" }
@@ -324,6 +327,7 @@ function Dashboard() {
     } = stats;
 
     const cards = buildSummaryCards(stats);
+
 
     return (
       <section>
@@ -870,12 +874,217 @@ function Dashboard() {
       (_, i) => i + 1
     );
 
+
+    const fetchLateEntries = async () => {
+  try {
+    setLateEntriesLoading(true);
+    const res = await fetch(`${API_BASE_URL}/outpass-route/getinfo/late-entries`);
+    if (!res.ok) throw new Error("Failed to fetch late entries");
+    const json = await res.json();
+    setLateEntries(Array.isArray(json) ? json : []);
+  } catch (err) {
+    console.error("Late entries fetch error:", err);
+    setLateEntries([]);
+  } finally {
+    setLateEntriesLoading(false);
+  }
+};
+const handleShowLateEntries = () => {
+  if (lateEntries.length === 0) {
+    fetchLateEntries();
+  }
+  setShowLateEntriesModal(true);
+};
+
+// Handle view individual late entry (redirect to outpass module)
+const handleViewLateEntry = (entry) => {
+  // Store the entry data for the outpass module to pick up
+  sessionStorage.setItem('viewLateEntry', JSON.stringify({
+    id: entry.id,
+    type: entry.request_type,
+    shouldOpenModal: true
+  }));
+  
+  // 🔄 CHANGED: Dispatch custom event instead of window.location.href
+  window.dispatchEvent(new CustomEvent('switchToOutpassTab', {
+    detail: {
+      targetTab: 'outpass-requests', // The exact tab identifier you use in LandingPage
+      openModal: true,
+      recordId: entry.id,
+      recordType: entry.request_type
+    }
+  }));
+  
+  // Optional: Show feedback that we're switching
+  console.log(`🔄 Switching to outpass tab for ${entry.name} (ID: ${entry.id})`);
+};
+
+const formatLateEntryTime = (timeStr) => {
+  if (!timeStr) return "N/A";
+  try {
+    const [hour, minute] = timeStr.split(":");
+    const date = dayjs().set("hour", hour).set("minute", minute);
+    return date.format("hh:mm A");
+  } catch {
+    return timeStr;
+  }
+};
+
+// 🆕 FETCH LATE ENTRIES ON COMPONENT MOUNT (add this useEffect after existing data fetch useEffect)
+useEffect(() => {
+  fetchLateEntries();
+}, []);
+const renderLateEntriesAlert = () => {
+  const lateEntriesCount = lateEntries.length;
+  
+  if (lateEntriesCount === 0) return null;
+
+  return (
+    <div className="dashboard-late-entries-alert">
+      <div className="dashboard-alert-content">
+        <div className="dashboard-alert-icon-wrapper">
+          <div className="dashboard-alert-icon">
+            <AlertTriangle size={24} />
+          </div>
+          <div className="dashboard-alert-pulse" />
+        </div>
+        
+        <div className="dashboard-alert-text">
+          <div className="dashboard-alert-title">
+            <Clock size={16} className="dashboard-alert-title-icon" />
+            Late Entry Reviews Required
+          </div>
+          <div className="dashboard-alert-subtitle">
+            <Users size={14} className="dashboard-alert-subtitle-icon" />
+            {lateEntriesCount} student{lateEntriesCount > 1 ? 's' : ''} returned late and require{lateEntriesCount > 1 ? '' : 's'} warden review
+          </div>
+        </div>
+        
+        <div className="dashboard-alert-actions">
+          <button 
+            type="button"
+            className="dashboard-alert-btn primary"
+            onClick={handleShowLateEntries}
+          >
+            <span>Review {lateEntriesCount} Late Entr{lateEntriesCount > 1 ? 'ies' : 'y'}</span>
+            <ChevronRight size={16} className="dashboard-alert-btn-icon" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+const renderLateEntriesModal = () => {
+  if (!showLateEntriesModal) return null;
+
+  return (
+    <div className="dashboard-modal-backdrop" onClick={() => setShowLateEntriesModal(false)}>
+      <div className="dashboard-modal dashboard-late-entries-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="dashboard-modal-header">
+          <h3 className="dashboard-modal-title">
+            Late Entry Reviews ({lateEntries.length})
+          </h3>
+          <button
+            type="button"
+            className="dashboard-modal-close"
+            onClick={() => setShowLateEntriesModal(false)}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="dashboard-modal-body">
+          {lateEntriesLoading ? (
+            <div className="dashboard-late-entries-loading">
+              Loading late entries...
+            </div>
+          ) : lateEntries.length === 0 ? (
+            <div className="dashboard-late-entries-empty">
+              No late entries found.
+            </div>
+          ) : (
+            <div className="dashboard-late-entries-grid">
+              {lateEntries.map((entry) => (
+                <div key={entry.id} className="dashboard-late-entry-card">
+                  <div className="dashboard-late-entry-header">
+                    <div className="dashboard-late-entry-type">
+                      <span className={`dashboard-entry-type-badge ${entry.request_type}`}>
+                        {entry.request_type === 'leave' ? 'LEAVE' : 'OUTPASS'}
+                      </span>
+                    </div>
+                    <div className="dashboard-late-entry-status">
+                      Late Entry
+                    </div>
+                  </div>
+
+                  <div className="dashboard-late-entry-info">
+                    <div className="dashboard-late-entry-name">
+                      {entry.name}
+                    </div>
+                    <div className="dashboard-late-entry-id">
+                      {entry.request_type === 'leave' ? 'Roll No' : 'Hostel ID'}: {entry.identifier || entry.display_id}
+                    </div>
+                    <div className="dashboard-late-entry-hostel">
+                      {entry.hostel}
+                    </div>
+                  </div>
+
+                  <div className="dashboard-late-entry-timing">
+                    <div className="dashboard-timing-row">
+                      <span className="dashboard-timing-label">Expected:</span>
+                      <span className="dashboard-timing-value expected">
+                        {dayjs(entry.date_to).format('MMM D')} - {formatLateEntryTime(entry.time_in)}
+                      </span>
+                    </div>
+                    <div className="dashboard-timing-row">
+                      <span className="dashboard-timing-label">Actual:</span>
+                      <span className="dashboard-timing-value actual">
+                        {entry.entry_time ? 
+                          dayjs(entry.entry_time).format('MMM D, hh:mm A') : 
+                          'Not recorded'
+                        }
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="dashboard-late-entry-purpose">
+                    <span className="dashboard-purpose-label">Purpose:</span>
+                    <span className="dashboard-purpose-text">
+                      {entry.purpose}
+                    </span>
+                  </div>
+
+                  <div className="dashboard-late-entry-actions">
+                    <button
+                      type="button"
+                      className="dashboard-late-entry-view-btn"
+                      onClick={() => handleViewLateEntry(entry)}
+                    >
+                      Review & Complete
+                    </button>
+                  </div>
+
+                  <div className="dashboard-late-entry-meta">
+                    <span className="dashboard-meta-text">
+                      Created: {dayjs(entry.created_at).format('MMM D, hh:mm A')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
   return (
     <div className="dashboard-container">
       {loading ? (
         <div className="dashboard-container-loading">Loading analytics…</div>
       ) : (
         <>
+         {renderLateEntriesAlert()}
           {/* top bar: left = view toggle, right = date calendar */}
           <div className="dashboard-topbar">
             <div className="dashboard-topbar-left">
@@ -1061,6 +1270,7 @@ function Dashboard() {
           {renderExpandedModal()}
         </>
       )}
+      {renderLateEntriesModal()}
     </div>
   );
 }
