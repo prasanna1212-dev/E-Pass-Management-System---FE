@@ -15,6 +15,11 @@ import {
   Form,
   Typography,
   Spin,
+  Card,
+  Statistic,
+  Row,
+  Col,
+  Divider, 
 } from "antd";
 import {
   SearchOutlined,
@@ -28,6 +33,14 @@ import {
   FileTextOutlined,
   EditOutlined,
   LoadingOutlined,
+  BarChartOutlined,
+  ClockCircleOutlined,
+  CalendarOutlined,
+  TrophyOutlined,
+   LockOutlined,     
+  UnlockOutlined, 
+  CrownOutlined,   
+  ClockCircleOutlined as TimeIcon
 } from "@ant-design/icons";
 import { 
   AlertTriangle, 
@@ -40,7 +53,10 @@ import {
   Lightbulb, 
   Lock,
   Check,
-  X
+  X,
+   TrendingUp,
+  Calendar,
+  Clock 
 } from 'lucide-react';
 import "../styles/OutPassRequest.css";
 import toast from "react-hot-toast";
@@ -52,7 +68,17 @@ const { Text } = Typography;
 
 const POLLING_INTERVAL = 120000;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
+<style jsx>{`
+  .image-download-overlay {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  
+  .image-download-overlay:hover,
+  div:hover .image-download-overlay {
+    opacity: 1 !important;
+  }
+`}</style>
 function OutPassRequest() {
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
@@ -94,12 +120,54 @@ const [selectedPassesToExpire, setSelectedPassesToExpire] = useState([]);
 const [expireAllPasses, setExpireAllPasses] = useState(false);
 const [expireMode, setExpireMode] = useState('none');
 const [hostelFilter, setHostelFilter] = useState("All");
+const [usageStats, setUsageStats] = useState(null);
+const [usageLoading, setUsageLoading] = useState(false);
+
+const [tableImages, setTableImages] = useState({});
+const [imageLoadingIds, setImageLoadingIds] = useState(new Set());
+const [lateEntryModalVisible, setLateEntryModalVisible] = useState(false);
+const [lateEntryTarget, setLateEntryTarget] = useState(null);
+const [lateEntryForm] = Form.useForm();
+const [lateEntryLoading, setLateEntryLoading] = useState(false);
 
 
 const handleHostelChange = (value) => {
   setHostelFilter(value);
   applyFilters(data, search, dateRange, statusFilter, permissionFilter, value);
 };
+const fetchUsageStatistics = useCallback(async (item) => {
+  setUsageLoading(true);
+  try {
+    // Determine the identifier to use for the API call
+    const identifier = item.hostel_id || item.display_id || item.id;
+    const identifierType = item.hostel_id ? 'hostel_id' : 'display_id';
+    
+    const res = await fetch(
+      `${API_BASE_URL}/outpass-route/student/usage-stats?${identifierType}=${identifier}`
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to fetch usage statistics");
+    }
+
+    const statsData = await res.json();
+    setUsageStats(statsData);
+  } catch (err) {
+    console.error("Error fetching usage statistics:", err);
+    notification.error({
+      message: "Error Loading Statistics",
+      description: "Failed to load student usage statistics.",
+    });
+    // Set empty stats as fallback
+    setUsageStats({
+      outpass: { total: 0, current_month: 0, current_year: 0, recent_requests: [] },
+      leave: { total: 0, current_month: 0, current_year: 0, recent_requests: [] }
+    });
+  } finally {
+    setUsageLoading(false);
+  }
+}, []);
+
 
   // 🚀 OPTIMIZED: Fast fetch without images
 const fetchOutpassData = useCallback(async () => {
@@ -191,6 +259,75 @@ const fetchOutpassData = useCallback(async () => {
   currentPage,
   pageSize,
 ]);
+
+
+useEffect(() => {
+  // Check for late entry data from dashboard redirect
+  const handleSessionStorageRedirect = async () => {
+    const viewLateEntryData = sessionStorage.getItem('viewLateEntry');
+    
+    if (viewLateEntryData) {
+      try {
+        const { id, type, shouldOpenModal } = JSON.parse(viewLateEntryData);
+        
+        // Clear the session storage immediately
+        sessionStorage.removeItem('viewLateEntry');
+        
+        if (shouldOpenModal && id) {
+          // Wait for data to be loaded first
+          let attempts = 0;
+          const maxAttempts = 10; // Wait up to 5 seconds
+          
+          const findAndOpenRecord = () => {
+            const record = data.find(item => 
+              item.id === parseInt(id) && 
+              (
+                (type === 'leave' && (item.is_leave_request || item.permission === 'leave')) ||
+                (type === 'outpass' && (!item.is_leave_request && item.permission !== 'leave'))
+              )
+            );
+            
+            if (record) {
+              // Found the record, open the modal
+              console.log('🎯 Opening late entry modal for:', record.name);
+              handleViewItem(record);
+              
+              // Optional: Show a toast notification
+              toast.success(`Opened late entry for ${record.name}`);
+              
+              return true;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts && data.length === 0) {
+              // Data still loading, try again in 500ms
+              setTimeout(findAndOpenRecord, 500);
+            } else if (attempts >= maxAttempts) {
+              console.warn('Could not find late entry record after redirect');
+              notification.warning({
+                message: "Record Not Found",
+                description: "The late entry record could not be found. Please search manually.",
+              });
+            }
+            
+            return false;
+          };
+          
+          // Start the search
+          findAndOpenRecord();
+        }
+      } catch (error) {
+        console.error('Error handling session storage redirect:', error);
+        sessionStorage.removeItem('viewLateEntry'); // Clean up on error
+      }
+    }
+  };
+  
+  // Only run this effect when data is loaded and not empty
+  if (data.length > 0) {
+    handleSessionStorageRedirect();
+  }
+}, [data]);
 const getUniqueHostels = () => {
   const hostels = [...new Set(data.map(item => item.hostel).filter(Boolean))];
   return hostels.sort();
@@ -213,6 +350,142 @@ const getUniqueHostels = () => {
     displayName: extractName(userDomainJoinUpn)
   };
 };
+
+const getUserRole = () => {
+  const userRole = localStorage.getItem("role");
+  return userRole || 'user'; // Default to 'user' if no role found
+};
+const getPassAccessInfo = (record, allData) => {
+  const userRole = getUserRole();
+  const isAdmin = userRole === 'admin';
+  const studentId = record.hostel_id || record.display_id;
+  const today = dayjs().format('YYYY-MM-DD');
+  const recordTargetDate = dayjs(record.date_from).format('YYYY-MM-DD');
+  
+  // 🔥 RESTRICTION 1: Check for OVERLAPPING active passes (date-specific)
+  const hasActivePass = allData.some(item => {
+    const itemStudentId = item.hostel_id || item.display_id;
+    const itemDateFrom = dayjs(item.date_from);
+    const itemDateTo = dayjs(item.date_to);
+    const recordDateFrom = dayjs(record.date_from);
+    const recordDateTo = dayjs(record.date_to);
+    
+    // Check for date overlap
+    const hasDateOverlap = recordDateFrom.isBefore(itemDateTo) && 
+                          recordDateTo.isAfter(itemDateFrom);
+    
+    return (
+      itemStudentId === studentId &&
+      (item.status === "Accepted" || item.status === "Renewed") &&
+      item.id !== record.id &&
+      hasDateOverlap
+    );
+  });
+  
+  // 🔥 RESTRICTION 2: Check if student used pass TODAY and current request is also for TODAY
+  const hasUsedPassToday = recordTargetDate === today && allData.some(item => {
+    const itemStudentId = item.hostel_id || item.display_id;
+    const itemTargetDate = dayjs(item.date_from).format('YYYY-MM-DD');
+    return (
+      itemStudentId === studentId &&
+      itemTargetDate === today &&
+      item.status === "Completed" &&
+      item.id !== record.id
+    );
+  });
+  
+  // 🔥 RESTRICTION 3: Check if this is NOT the first pending pass for same target date
+  const sameTargetDatePendingPasses = allData.filter(item => {
+    const itemTargetDate = dayjs(item.date_from).format('YYYY-MM-DD');
+    const itemStudentId = item.hostel_id || item.display_id;
+    return (
+      itemTargetDate === recordTargetDate &&
+      itemStudentId === studentId &&
+      item.status === "Pending" &&
+      item.id !== record.id
+    );
+  });
+  
+  const isFirstPending = sameTargetDatePendingPasses.length === 0 || 
+    sameTargetDatePendingPasses.every(pass => 
+      dayjs(record.created_at).valueOf() < dayjs(pass.created_at).valueOf()
+    );
+  
+  // 🎯 DETERMINE IF ADMIN APPROVAL IS REQUIRED
+  const requiresAdminApproval = hasActivePass || hasUsedPassToday || !isFirstPending;
+  
+  // 🎯 RETURN BASED ON USER ROLE AND RESTRICTIONS
+  if (isAdmin) {
+    return {
+      canAccept: true,
+      isAdmin: true,
+      isFirstPending: isFirstPending,
+      isRestricted: false,
+      hasMultiplePending: !isFirstPending,
+      passPosition: requiresAdminApproval ? 'admin_required' : 'warden_acceptable',
+      restrictionReason: hasActivePass ? 'has_active_pass' : 
+                        hasUsedPassToday ? 'used_pass_today' : 
+                        !isFirstPending ? 'multiple_pending' : null,
+      showAsAdminOnly: requiresAdminApproval
+    };
+  } else {
+    // Warden - check restrictions
+    if (requiresAdminApproval) {
+      return {
+        canAccept: false,
+        isAdmin: false,
+        isFirstPending: isFirstPending,
+        isRestricted: true,
+        hasMultiplePending: !isFirstPending,
+        passPosition: 'admin_required',
+        restrictionReason: hasActivePass ? 'has_active_pass' : 
+                          hasUsedPassToday ? 'used_pass_today' : 
+                          'multiple_pending',
+        showAsAdminOnly: false
+      };
+    } else {
+      return {
+        canAccept: true,
+        isAdmin: false,
+        isFirstPending: true,
+        isRestricted: false,
+        hasMultiplePending: false,
+        passPosition: 'warden_acceptable',
+        restrictionReason: null,
+        showAsAdminOnly: false
+      };
+    }
+  }
+};
+
+const isFirstPendingPassOfDay = (record, allData) => {
+  // Check for same TARGET DATE passes (not creation date)
+  const recordTargetDate = dayjs(record.date_from).format('YYYY-MM-DD');
+  const studentId = record.hostel_id || record.display_id;
+  
+  const sameTargetDatePendingPasses = allData.filter(item => {
+    const itemTargetDate = dayjs(item.date_from).format('YYYY-MM-DD');
+    const itemStudentId = item.hostel_id || item.display_id;
+    return (
+      itemTargetDate === recordTargetDate &&
+      itemStudentId === studentId &&
+      item.status === "Pending" &&
+      item.id !== record.id  // Exclude current record
+    );
+  });
+  
+  // If no other pending passes for same target date, this is the first
+  if (sameTargetDatePendingPasses.length === 0) return true;
+  
+  // Check if current record was created first among pending passes for same date
+  const allPendingForDate = [...sameTargetDatePendingPasses, record];
+  const sortedPasses = allPendingForDate.sort((a, b) => 
+    dayjs(a.created_at).valueOf() - dayjs(b.created_at).valueOf()
+  );
+  
+  return sortedPasses[0].id === record.id;
+};
+
 
   // 🆕 NEW: Fetch detailed item with images on demand
   const fetchDetailedItem = useCallback(async (item) => {
@@ -241,14 +514,305 @@ const getUniqueHostels = () => {
       setDetailLoading(false);
     }
   }, []);
+const UsageStatisticsSection = () => {
+  if (usageLoading) {
+    return (
+      <div style={{ 
+        textAlign: "center", 
+        padding: "16px",
+        background: "#f8fafc",
+        borderRadius: "8px",
+        marginBottom: "16px",
+        border: "1px solid #e2e8f0"
+      }}>
+        <Spin 
+          indicator={<LoadingOutlined style={{ fontSize: 20 }} spin />}
+          style={{ color: '#3b82f6' }}
+        />
+        <div style={{ marginTop: 6, fontSize: 13, color: "#64748b" }}>
+          Loading usage statistics...
+        </div>
+      </div>
+    );
+  }
 
+  if (!usageStats) return null;
+
+  return (
+    <div style={{ marginBottom: "16px" }}>
+      <div style={{ 
+        display: "flex", 
+        alignItems: "center", 
+        gap: "6px", 
+        marginBottom: "12px",
+        paddingBottom: "6px",
+        borderBottom: "1px solid #e2e8f0"
+      }}>
+        <div
+          style={{
+            background: "#3b82f6",
+            borderRadius: "6px",
+            width: "24px",
+            height: "24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <BarChartOutlined style={{ color: "white", fontSize: "14px" }} />
+        </div>
+        <h3 style={{ 
+          margin: 0, 
+          fontSize: "16px", 
+          fontWeight: "600",
+          color: "#1f2937"
+        }}>
+          Student Usage Statistics
+        </h3>
+      </div>
+
+      <Row gutter={[12, 12]}>
+        {/* Outpass Statistics */}
+        <Col span={12}>
+          <Card
+            size="small"
+            style={{
+              background: "#fffbeb",
+              border: "1px solid #fed7aa",
+              borderRadius: "8px",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)"
+            }}
+            bodyStyle={{ padding: "12px" }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{
+                background: "#fef3c7",
+                borderRadius: "50%",
+                width: "36px",
+                height: "36px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                border: "1px solid #fcd34d"
+              }}>
+                <UserOutlined style={{ fontSize: "18px", color: "#d97706" }} />
+              </div>
+              <h4 style={{ 
+                margin: "0 0 6px", 
+                color: "#92400e", 
+                fontWeight: "600", 
+                fontSize: "14px" 
+              }}>
+                Outpass Usage
+              </h4>
+              <div style={{ display: "flex", justifyContent: "space-around" }}>
+                <div>
+                  <div style={{ fontSize: "20px", fontWeight: "700", color: "#92400e" }}>
+                    {usageStats.outpass?.total || 0}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#92400e", fontWeight: "500" }}>
+                    Total
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: "600", color: "#b45309" }}>
+                    {usageStats.outpass?.current_month || 0}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#92400e", fontWeight: "500" }}>
+                    This Month
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: "600", color: "#b45309" }}>
+                    {usageStats.outpass?.current_year || 0}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#92400e", fontWeight: "500" }}>
+                    This Year
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+
+        {/* Leave Statistics */}
+        <Col span={12}>
+          <Card
+            size="small"
+            style={{
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)"
+            }}
+            bodyStyle={{ padding: "12px" }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{
+                background: "#fee2e2",
+                borderRadius: "50%",
+                width: "36px",
+                height: "36px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                border: "1px solid #fca5a5"
+              }}>
+                <FileTextOutlined style={{ fontSize: "18px", color: "#dc2626" }} />
+              </div>
+              <h4 style={{ 
+                margin: "0 0 6px", 
+                color: "#991b1b", 
+                fontWeight: "600", 
+                fontSize: "14px" 
+              }}>
+                Leave Usage
+              </h4>
+              <div style={{ display: "flex", justifyContent: "space-around" }}>
+                <div>
+                  <div style={{ fontSize: "20px", fontWeight: "700", color: "#991b1b" }}>
+                    {usageStats.leave?.total || 0}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "500" }}>
+                    Total
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: "600", color: "#dc2626" }}>
+                    {usageStats.leave?.current_month || 0}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "500" }}>
+                    This Month
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: "600", color: "#dc2626" }}>
+                    {usageStats.leave?.current_year || 0}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "500" }}>
+                    This Year
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Recent Activity Summary - More Compact */}
+      {(usageStats.outpass?.recent_requests?.length > 0 || usageStats.leave?.recent_requests?.length > 0) && (
+        <Card
+          title={
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Clock size={14} color="#6b7280" />
+              <span style={{ color: "#374151", fontSize: "13px", fontWeight: "600" }}>
+                Recent Activity (Last 5 Processed)
+              </span>
+            </div>
+          }
+          size="small"
+          style={{
+            marginTop: "12px",
+            borderRadius: "6px",
+            border: "1px solid #e5e7eb",
+            background: "#fafafa"
+          }}
+          bodyStyle={{ padding: "8px" }}
+          headStyle={{ padding: "8px 12px", minHeight: "auto" }}
+        >
+          <div style={{ 
+            display: "grid", 
+            gap: "6px",
+            maxHeight: "120px",
+            overflowY: "auto"
+          }}>
+            {[
+              ...(usageStats.outpass?.recent_requests || []).map(req => ({...req, type: 'outpass'})),
+              ...(usageStats.leave?.recent_requests || []).map(req => ({...req, type: 'leave'}))
+            ]
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 5)
+            .map((request, index) => (
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 6px",
+                  background: request.type === 'leave' ? '#fef2f2' : '#fffbeb',
+                  borderRadius: "4px",
+                  border: `1px solid ${request.type === 'leave' ? '#fecaca' : '#fed7aa'}`,
+                  fontSize: "11px"
+                }}
+              >
+                <div
+                  style={{
+                    width: "4px",
+                    height: "4px",
+                    borderRadius: "50%",
+                    background: request.type === 'leave' ? '#ef4444' : '#f59e0b',
+                    flexShrink: 0
+                  }}
+                />
+                <div style={{ flex: 1, color: "#374151" }}>
+                  <span style={{ fontWeight: "500" }}>
+                    {request.type === 'leave' ? 'Leave' : 'Outpass'}
+                  </span>
+                  {' • '}
+                  <span>{request.purpose?.substring(0, 20)}{request.purpose?.length > 20 ? '...' : ''}</span>
+                  {request.status && (
+                    <span style={{ 
+                      marginLeft: "4px",
+                      color: request.status === 'Completed' ? '#059669' : 
+                            request.status === 'Renewed' ? '#0369a1' : '#6b7280',
+                      fontSize: "10px",
+                      fontWeight: "500"
+                    }}>
+                      ({request.status})
+                    </span>
+                  )}
+                </div>
+                <div style={{ 
+                  color: "#9ca3af", 
+                  fontSize: "10px",
+                  flexShrink: 0
+                }}>
+                  {dayjs(request.created_at).format('MMM D')}
+                </div>
+              </div>
+            ))}
+          </div>
+          {[
+            ...(usageStats.outpass?.recent_requests || []),
+            ...(usageStats.leave?.recent_requests || [])
+          ].length === 0 && (
+            <div style={{ 
+              textAlign: "center", 
+              color: "#9ca3af", 
+              fontSize: "11px",
+              padding: "12px"
+            }}>
+              No recent processed requests found
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+};
   // 🚀 UPDATED: Enhanced view handler with image loading
   const handleViewItem = async (item) => {
     setSelectedItem(item);
     setDetailedItem(null); // Clear previous detailed data
-    
+    setUsageStats(null);
     // Immediately show modal with basic info, then load images
-    await fetchDetailedItem(item);
+     await Promise.all([
+    fetchDetailedItem(item),
+    fetchUsageStatistics(item) // 🆕 ADD THIS LINE
+  ]);
   };
 
   useEffect(() => {
@@ -258,7 +822,7 @@ const getUniqueHostels = () => {
   }, [fetchOutpassData]);
 
   // Apply filters with all filter types
-  const applyFilters = useCallback(
+ const applyFilters = useCallback(
   (
     currentData,
     currentSearch,
@@ -612,6 +1176,11 @@ const { displayName } = getUserDetails();
             : `QR emailed to student with updated timing. Approved by ${displayName}.`,
         });
         setEditModalOpen(false);
+        if (selectedItem && selectedItem.id === editRecord.id) {
+          setSelectedItem(null);
+          setDetailedItem(null);
+          setUsageStats(null);
+        }
         fetchOutpassData();
       } else {
         notification.error({
@@ -689,7 +1258,16 @@ const handleForceAccept = async () => {
           ? `Leave request accepted by ${activePassData.reviewed_by}.`
           : `Outpass accepted by ${activePassData.reviewed_by}. QR sent via email.`,
       });
-
+if (activePassData.action_type === 'approve_with_edits') {
+  setEditModalOpen(false);
+  
+  // 🆕 ADD: Close the view modal as well if it's the same record
+  if (selectedItem && selectedItem.id === activePassData.record.id) {
+    setSelectedItem(null);
+    setDetailedItem(null);
+    setUsageStats(null);
+  }
+}
       // Reset states and close modals
       setActivePassModal(false);
       setActivePassData(null);
@@ -782,7 +1360,7 @@ const formatActivePassDisplay = (pass) => {
   };
 
   // Handle rejection (works for both outpass and leave)
-  const handleRejectionSubmit = async () => {
+const handleRejectionSubmit = async () => {
   try {
     const values = await rejectionForm.validateFields();
     setRejectionLoading(true);
@@ -822,6 +1400,12 @@ const formatActivePassDisplay = (pass) => {
 
       setRejectionModalVisible(false);
       setRejectionTarget(null);
+      if (selectedItem && selectedItem.id === rejectionTarget.id) {
+        setSelectedItem(null);
+        setDetailedItem(null);
+        setUsageStats(null);
+      }
+      
       await fetchOutpassData();
       setCurrentPage(1);
     } else {
@@ -840,6 +1424,7 @@ const formatActivePassDisplay = (pass) => {
     setRejectionLoading(false);
   }
 };
+
 
   const handleRejectionCancel = () => {
     setRejectionModalVisible(false);
@@ -897,6 +1482,46 @@ const formatActivePassDisplay = (pass) => {
     const mime = item.image_mimetype || "image/jpeg";
     return `data:${mime};base64,${item.student_image}`;
   };
+const fetchTableImage = useCallback(async (item) => {
+  const itemId = item.id;
+  
+  // Skip if already loading or loaded
+  if (imageLoadingIds.has(itemId) || tableImages[itemId]) {
+    return;
+  }
+
+  setImageLoadingIds(prev => new Set(prev).add(itemId));
+
+  try {
+    const requestType = item.is_leave_request || item.permission === 'leave' ? 'leave' : 'outpass';
+    const res = await fetch(
+      `${API_BASE_URL}/outpass-route/getinfo/outpass/${item.id}/details?type=${requestType}`
+    );
+
+    if (res.ok) {
+      const detailedData = await res.json();
+      const imageSrc = getStudentImageSrc(detailedData);
+      
+      setTableImages(prev => ({
+        ...prev,
+        [itemId]: imageSrc || null
+      }));
+    }
+  } catch (err) {
+    console.log(`Could not load image for ${itemId}`);
+    setTableImages(prev => ({
+      ...prev,
+      [itemId]: null
+    }));
+  } finally {
+    setImageLoadingIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(itemId);
+      return newSet;
+    });
+  }
+}, [tableImages, imageLoadingIds]);
+
 
   const getLeaveLetterSrc = (item) => {
     if (!item || !item.leave_letter) return null;
@@ -939,7 +1564,12 @@ const formatActivePassDisplay = (pass) => {
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(currentPage * pageSize, totalEntries);
   const paginatedData = filteredData.slice(startIndex, endIndex);
-
+useEffect(() => {
+  // Load images for currently visible table rows
+  paginatedData.forEach(item => {
+    fetchTableImage(item);
+  });
+}, [paginatedData, fetchTableImage]);
   const PaginationInfo = () => (
     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
       <div style={{ display: "flex", alignItems: "center" }}>
@@ -966,9 +1596,80 @@ const formatActivePassDisplay = (pass) => {
 
   // Check if data has permission field to show permission filter
   const hasPermissionData = data.some((item) => item.permission);
-const hasHostelData = data.some((item) => item.hostel);  // 🆕 ADD THIS IF YOU WANT CONDITIONAL RENDERING
+const hasHostelData = data.some((item) => item.hostel);
   // Unified columns with conditional rendering
   const columns = [
+    {
+    title: "",
+    key: "profile_image",
+    width: 60,
+    render: (_, record) => {
+      const isLoading = imageLoadingIds.has(record.id);
+      const imageSrc = tableImages[record.id];
+      
+      if (isLoading) {
+        return (
+          <div style={{ 
+            width: "40px", 
+            height: "40px", 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center",
+            background: "#f5f5f5",
+            borderRadius: "8px"
+          }}>
+            <Spin size="small" />
+          </div>
+        );
+      }
+      
+      if (imageSrc) {
+        return (
+          <Image
+            src={imageSrc}
+            alt={`${record.name}'s photo`}
+            width={40}
+            height={40}
+            style={{
+              objectFit: "cover",
+              borderRadius: "8px",
+              border: "2px solid #e2e8f0",
+              cursor: "pointer"
+            }}
+            preview={{
+              mask: (
+                <div style={{ 
+                  fontSize: "10px", 
+                  color: "white",
+                  textAlign: "center",
+                  lineHeight: "12px"
+                }}>
+                  View
+                </div>
+              ),
+            }}
+            fallback="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyMEMxNy4yIDIwIDE1IDIyLjIgMTUgMjVTMTcuMiAzMCAyMCAzMFMyNSAyNy44IDI1IDI1UzIyLjggMjAgMjAgMjBaTTIwIDI4QzE4LjM0IDI4IDE3IDI2LjY2IDE3IDI1UzE4LjM0IDIyIDIwIDIyUzIzIDIzLjM0IDIzIDI1UzIxLjY2IDI4IDIwIDI4WiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNMjAgMTJDMTcuMjQgMTIgMTUgMTQuMjQgMTUgMTdTMTcuMjQgMjIgMjAgMjJTMjUgMTkuNzYgMjUgMTdTMjIuNzYgMTIgMjAgMTJaTTIwIDIwQzE4LjM0IDIwIDE3IDE4LjY2IDE3IDE3UzE4LjM0IDE0IDIwIDE0UzIzIDE1LjM0IDIzIDE3UzIxLjY2IDIwIDIwIDIwWiIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4="
+          />
+        );
+      }
+      
+      // Default placeholder when no image
+      return (
+        <div style={{
+          width: "40px",
+          height: "40px",
+          background: "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)",
+          borderRadius: "8px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "2px solid #e5e7eb"
+        }}>
+          <UserOutlined style={{ color: "#9ca3af", fontSize: "16px" }} />
+        </div>
+      );
+    },
+  },
     {
       title: "Name",
       dataIndex: "name",
@@ -1096,115 +1797,235 @@ const hasHostelData = data.some((item) => item.hostel);  // 🆕 ADD THIS IF YOU
     )
   ),
 },
-    {
-      title: "Action",
-      render: (_, record) => (
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          {/* View Button */}
-          <Button
-            icon={<EyeOutlined />}
-            type="link"
-            onClick={() => handleViewItem(record)}
-          >
-            View
-          </Button>
+ {
+  title: "Action",
+  render: (_, record) => {
+    const accessInfo = getPassAccessInfo(record, data);
 
-          {/* Conditional Rendering based on Status and Type */}
-          {record.status === "Renewal Pending" &&
-          (record.permission === "permission" || !record.permission) ? (
-            <>
+    return (
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        {/* View Button - unchanged */}
+        <Button
+          icon={<EyeOutlined />}
+          type="link"
+          onClick={() => handleViewItem(record)}
+        >
+          View
+        </Button>
+
+        {/* Conditional Rendering based on Status and Type */}
+        {record.status === "Renewal Pending" &&
+        (record.permission === "permission" || !record.permission) ? (
+          <>
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleDirectRenewApprove(record)}
+              style={{ backgroundColor: "#4b3d82", borderColor: "#4b3d82" }}
+            >
+              Renew
+            </Button>
+            <Button
+              danger
+              icon={<CloseCircleOutlined />}
+              onClick={() => handleRejectRenewal(record.id)}
+            >
+              Reject
+            </Button>
+          </>
+        ) :  record.status === "Pending" ? (
+          <>
+            <div style={{ position: "relative" }}>
               <Button
                 type="primary"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleDirectRenewApprove(record)}
-                style={{ backgroundColor: "#4b3d82", borderColor: "#4b3d82" }}
-              >
-                Renew
-              </Button>
-              <Button
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleRejectRenewal(record.id)}
-              >
-                Reject
-              </Button>
-            </>
-          ) : record.status === "Pending" ? (
-            <>
-              <Button
-                type="primary"
-                icon={<CheckCircleOutlined />}
+                icon={
+                  // 🎯 ADMIN gets crown icon for admin-required, regular icon for normal
+                  // 🎯 WARDEN gets lock icon for admin-required, regular icon for normal
+                  accessInfo.isAdmin ? (
+                    accessInfo.showAsAdminOnly ? <CrownOutlined /> : <CheckCircleOutlined />
+                  ) : (
+                    accessInfo.isRestricted ? <LockOutlined /> :
+                    accessInfo.hasMultiplePending ? <TimeIcon /> : 
+                    <CheckCircleOutlined />
+                  )
+                }
+                disabled={!accessInfo.canAccept}
                 onClick={() => {
                   setEditRecord(record);
-
-                  const originalOut = buildDateTime(
-                    record.date_from,
-                    record.time_out
-                  );
-                  const originalIn = buildDateTime(
-                    record.date_to,
-                    record.time_in
-                  );
+                  const originalOut = buildDateTime(record.date_from, record.time_out);
+                  const originalIn = buildDateTime(record.date_to, record.time_in);
                   const now = dayjs();
-
-                  const safeOut =
-                    originalOut && originalOut.isAfter(now)
-                      ? originalOut
-                      : now.add(5, "minute");
-
-                  let safeIn =
-                    originalIn && originalIn.isAfter(safeOut)
-                      ? originalIn
-                      : safeOut.add(1, "hour");
-
+                  const safeOut = originalOut && originalOut.isAfter(now) ? originalOut : now.add(5, "minute");
+                  let safeIn = originalIn && originalIn.isAfter(safeOut) ? originalIn : safeOut.add(1, "hour");
+                  
                   setEditedCheckOut(safeOut);
                   setEditedCheckIn(safeIn);
                   setEditedRemarks("");
-
-                  editForm.setFieldsValue({
-                    checkout: safeOut,
-                    checkin: safeIn,
-                    remarks: "",
-                  });
-
+                  editForm.setFieldsValue({ checkout: safeOut, checkin: safeIn, remarks: "" });
                   setEditModalOpen(true);
                 }}
+               style={{
+  // 🎯 ADMIN: Purple for admin-required, Green for normal
+  // 🎯 WARDEN: Better styling for restricted buttons
+  backgroundColor: accessInfo.isAdmin ? (
+    accessInfo.showAsAdminOnly ? "#722ed1" : "#52c41a" // Purple for admin-required, Green for normal
+  ) : (
+    accessInfo.isRestricted ? "#f97316" : // 🆕 UPDATED: Orange background for admin required
+    accessInfo.hasMultiplePending ? "#faad14" : // Orange for time-restricted
+    "#52c41a" // Green for normal
+  ),
+  borderColor: accessInfo.isAdmin ? (
+    accessInfo.showAsAdminOnly ? "#722ed1" : "#52c41a"
+  ) : (
+    accessInfo.isRestricted ? "#f97316" : // 🆕 UPDATED: Orange border
+    accessInfo.hasMultiplePending ? "#faad14" :
+    "#52c41a"
+  ),
+  // 🆕 UPDATED: Better text color for admin required
+  color: accessInfo.isAdmin ? "white" : (
+    accessInfo.isRestricted ? "white" : "white" // White text on all buttons
+  ),
+  opacity: accessInfo.canAccept ? 1 : 0.85, // 🆕 UPDATED: Less opacity reduction for better visibility
+  cursor: accessInfo.canAccept ? "pointer" : "not-allowed",
+  fontWeight: accessInfo.isRestricted ? "600" : "500", // 🆕 UPDATED: Bolder text for admin required
+  // 🆕 UPDATED: Add subtle shadow for admin required buttons
+  boxShadow: accessInfo.isRestricted ? "0 2px 4px rgba(249, 115, 22, 0.3)" : "none"
+}}
+                title={
+                  accessInfo.isAdmin ? (
+                    accessInfo.showAsAdminOnly ? 
+                      `Admin access required: ${accessInfo.restrictionReason === 'has_active_pass' ? 
+                        'Student has active pass' :
+                        accessInfo.restrictionReason === 'used_pass_today' ?
+                        'Student used pass today' :
+                        'Multiple passes for same date'}` :
+                      "Available for admin approval"
+                  ) : (
+                    accessInfo.isRestricted ? 
+                      (accessInfo.restrictionReason === 'has_active_pass' ? 
+                        "Student has active pass - Admin approval required" :
+                        accessInfo.restrictionReason === 'used_pass_today' ?
+                        "Student used pass today - Admin approval required" :
+                        "Multiple passes for same date - Admin approval required"
+                      ) :
+                    accessInfo.hasMultiplePending ? "Multiple pending passes - Time restricted" :
+                    "Available for warden approval"
+                  )
+                }
               >
-                Accept
+                {/* 🎯 BUTTON TEXT: Admin always shows "Accept", Warden shows different text */}
+                {accessInfo.isAdmin ? "Accept" : (
+                  accessInfo.isRestricted ? "Admin Required" :
+                  accessInfo.hasMultiplePending ? "Time-Restricted" :
+                  "Accept"
+                )}
               </Button>
+              
+              {/* 🆕 VISUAL INDICATORS */}
+              {/* Crown indicator for admin-required passes (admin view) */}
+              {accessInfo.isAdmin && accessInfo.showAsAdminOnly && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-8px",
+                    right: "-8px",
+                    background: "#722ed1",
+                    color: "white",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "8px",
+                    fontWeight: "bold",
+                    zIndex: 1,
+                    border: "1px solid white"
+                  }}
+                >
+                  👑
+                </div>
+              )}
+              
+              {/* Lock indicator for restricted passes (warden view) */}
+              {!accessInfo.isAdmin && accessInfo.isRestricted && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-8px",
+                    right: "-8px",
+                    background: "#ff4d4f",
+                    color: "white",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    zIndex: 1,
+                    border: "1px solid white"
+                  }}
+                >
+                  !
+                </div>
+              )}
+              
+              {/* Time indicator for multiple pending (warden view) */}
+              {!accessInfo.isAdmin && accessInfo.hasMultiplePending && !accessInfo.isRestricted && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-8px",
+                    right: "-8px",
+                    background: "#faad14",
+                    color: "white",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "9px",
+                    fontWeight: "bold",
+                    zIndex: 1,
+                    border: "1px solid white"
+                  }}
+                >
+                  1
+                </div>
+              )}
+            </div>
 
-              <Button danger onClick={() => handleRejectClick(record)}>
-                Reject
-              </Button>
-            </>
-          ) : (
-            <Tag
-              color={
-                record.status === "Accepted"
-                  ? "success"
-                  : record.status === "Rejected"
-                  ? "error"
-                  : record.status === "Renewed"
-                  ? "processing"
-                  : record.status === "Completed"
-                  ? "purple"
-                  : "default"
-              }
-              style={{ fontWeight: "600" }}
-            >
-              {record.status.toUpperCase()}
-            </Tag>
-          )}
-        </div>
-      ),
-    },
+            <Button danger onClick={() => handleRejectClick(record)}>
+              Reject
+            </Button>
+          </>
+        ) : (
+          <Tag
+            color={
+              record.status === "Accepted" ? "success" :
+              record.status === "Rejected" ? "error" :
+              record.status === "Renewed" ? "processing" :
+              record.status === "Completed" ? "purple" : "default"
+            }
+            style={{ fontWeight: "600" }}
+          >
+            {record.status.toUpperCase()}
+          </Tag>
+        )}
+      </div>
+    );
+  },
+},
   ];
 
 
@@ -1217,6 +2038,7 @@ const EnhancedActivePassModal = () => (
     open={activePassModal}
     onCancel={handleActivePassCancel}
     width={720}
+    zIndex={1200}
     maskClosable={false}
     className="minimal-active-pass-modal"
     footer={null}
@@ -2461,6 +3283,266 @@ const EnhancedActivePassModal = () => (
 //     )}
 //   </Modal>
 // );
+const downloadStudentImage = (item, imageSrc) => {
+  if (!imageSrc || !item) return;
+  
+  try {
+    // Create a temporary link element
+    const link = document.createElement('a');
+    link.href = imageSrc;
+    
+    // Generate filename with student info
+    const fileName = `${item.name.replace(/\s+/g, '_')}_${item.display_id || item.hostel_id || 'student'}_photo.jpg`;
+    link.download = fileName;
+    
+    // Append to body, click, and remove
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Show success notification
+    notification.success({
+      message: "Download Started",
+      description: `Student photo downloaded as ${fileName}`,
+      duration: 3,
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+    notification.error({
+      message: "Download Failed", 
+      description: "Could not download the student image.",
+    });
+  }
+};
+
+// Download function for leave letter
+const downloadLeaveLetter = (item, letterSrc) => {
+  if (!letterSrc || !item) return;
+  
+  try {
+    const link = document.createElement('a');
+    link.href = letterSrc;
+    
+    // Generate filename for leave letter
+    const fileName = `${item.name.replace(/\s+/g, '_')}_${item.display_id || item.hostel_id || 'student'}_leave_letter.jpg`;
+    link.download = fileName;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    notification.success({
+      message: "Download Started",
+      description: `Leave letter downloaded as ${fileName}`,
+      duration: 3,
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+    notification.error({
+      message: "Download Failed",
+      description: "Could not download the leave letter.",
+    });
+  }
+};
+const getPermissionLetterSrc = (item) => {
+  if (!item || !item.permission_letter) return null;
+
+  const mime = item.permission_letter_mimetype || "image/jpeg";
+  const raw = item.permission_letter;
+
+  if (typeof raw === "string" && raw.startsWith("data:")) {
+    return raw;
+  }
+
+  if (typeof raw === "string" && !raw.startsWith("\\x")) {
+    return `data:${mime};base64,${raw}`;
+  }
+
+  if (typeof raw === "string" && raw.startsWith("\\x")) {
+    const hex = raw.slice(2);
+    let binary = "";
+    for (let i = 0; i < hex.length; i += 2) {
+      binary += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    const base64 = window.btoa(binary);
+    return `data:${mime};base64,${base64}`;
+  }
+
+  if (raw && typeof raw === "object" && Array.isArray(raw.data)) {
+    const uint8 = new Uint8Array(raw.data);
+    let binary = "";
+    uint8.forEach((b) => {
+      binary += String.fromCharCode(b);
+    });
+    const base64 = window.btoa(binary);
+    return `data:${mime};base64,${base64}`;
+  }
+
+  return null;
+};
+
+// 🆕 ADD THIS NEW FUNCTION after the downloadLeaveLetter function
+const downloadPermissionLetter = (item, letterSrc) => {
+  if (!letterSrc || !item) return;
+  
+  try {
+    const link = document.createElement('a');
+    link.href = letterSrc;
+    
+    // Generate filename for permission letter
+    const fileName = `${item.name.replace(/\s+/g, '_')}_${item.display_id || item.hostel_id || 'student'}_permission_letter.jpg`;
+    link.download = fileName;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    notification.success({
+      message: "Download Started",
+      description: `Permission letter downloaded as ${fileName}`,
+      duration: 3,
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+    notification.error({
+      message: "Download Failed",
+      description: "Could not download the permission letter.",
+    });
+  }
+};
+
+const handleLateEntryReview = async () => {
+  try {
+    const values = await lateEntryForm.validateFields();
+    setLateEntryLoading(true);
+    const { displayName } = getUserDetails();
+
+    const isLeaveRequest = 
+      lateEntryTarget.is_leave_request || 
+      lateEntryTarget.permission === "leave";
+    
+    let endpoint;
+    if (isLeaveRequest) {
+      endpoint = `${API_BASE_URL}/outpass-route/leave/review-late-entry/${lateEntryTarget.id}`;
+    } else {
+      endpoint = `${API_BASE_URL}/outpass-route/outpass/review-late-entry/${lateEntryTarget.id}`;
+    }
+
+    let response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        late_reason_justification: values.justification.trim(),
+        warden_remarks: values.remarks?.trim() || "",
+        reviewed_by: displayName,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      notification.success({
+        message: "Late Entry Reviewed",
+        description: `Late entry justified and marked as completed for ${lateEntryTarget.name}.`,
+      });
+if (selectedItem && selectedItem.id === lateEntryTarget.id) {
+  setSelectedItem({ ...selectedItem, status: 'Completed', reviewed_by: displayName });
+  // Optionally close the view modal
+  setSelectedItem(null);
+  setDetailedItem(null);
+  setUsageStats(null);
+}
+      setLateEntryModalVisible(false);
+      setLateEntryTarget(null);
+      await fetchOutpassData();
+      
+      // Update the current view modal if it's the same record
+      if (selectedItem && selectedItem.id === lateEntryTarget.id) {
+        setSelectedItem({ ...selectedItem, status: 'Completed', reviewed_by: displayName });
+      }
+      
+      setCurrentPage(1);
+    } else {
+      notification.error({
+        message: "Review Failed",
+        description: result.message || "Failed to review late entry.",
+      });
+    }
+  } catch (error) {
+    console.error("Error during late entry review:", error);
+    notification.error({
+      message: "Network Error",
+      description: "Network or server error while reviewing late entry.",
+    });
+  } finally {
+    setLateEntryLoading(false);
+  }
+};
+
+const handleLateEntryCancel = () => {
+  setLateEntryModalVisible(false);
+  setLateEntryTarget(null);
+  lateEntryForm.resetFields();
+};
+
+// Open Late Entry Review Modal
+const handleLateEntryReviewClick = (record) => {
+  setLateEntryTarget(record);
+  setLateEntryModalVisible(true);
+  lateEntryForm.resetFields();
+};
+
+const AcceptButtonLegend = () => {
+  const userRole = getUserRole();
+  const isAdmin = userRole === 'admin';
+
+  return (
+    <div style={{
+      background: "#f0f2f5",
+      padding: "8px 12px",
+      borderRadius: "6px",
+      marginBottom: "16px",
+      fontSize: "12px"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+        <span style={{ fontWeight: "600", color: "#595959" }}>
+          {isAdmin ? "Admin" : "Warden"} Button Types:
+        </span>
+        
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <CheckCircleOutlined style={{ color: "#52c41a" }} />
+          <span style={{ color: "#52c41a", fontWeight: "500" }}>Normal Accept</span>
+        </div>
+        
+        {isAdmin ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <CrownOutlined style={{ color: "#722ed1" }} />
+            <span style={{ color: "#722ed1", fontWeight: "500" }}>Admin Access Required</span>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <TimeIcon style={{ color: "#faad14" }} />
+              <span style={{ color: "#faad14", fontWeight: "500" }}>Time-Restricted</span>
+            </div>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <LockOutlined style={{ color: "#ff7875" }} />
+              <span style={{ color: "#ff7875", fontWeight: "500" }}>Admin Required</span>
+            </div>
+          </>
+        )}
+      </div>
+      
+      <div style={{ marginTop: "4px", fontSize: "11px", color: "#8c8c8c" }}>
+        {isAdmin ? 
+          "Purple crown indicates passes requiring admin-level access due to business rules" :
+          "Admin Required: Student has active pass • Student used pass today • Multiple passes for same date"
+        }
+      </div>
+    </div>
+  );
+};
 
 return (
     <div className="outpass-request-container">
@@ -2484,17 +3566,6 @@ return (
 
         {/* Status Filter */}
         <Select
-  value={hostelFilter}
-  style={{ width: 150, marginLeft: 10 }}
-  onChange={handleHostelChange}
-  placeholder="Hostel"
->
-  <Option value="All">All Hostels</Option>
-  {getUniqueHostels().map(hostel => (
-    <Option key={hostel} value={hostel}>{hostel}</Option>
-  ))}
-</Select>
-        <Select
           value={statusFilter}
           style={{ width: 150, marginLeft: 10 }}
           onChange={handleStatusChange}
@@ -2508,7 +3579,17 @@ return (
           <Option value="Renewed">Renewed</Option>
           <Option value="Completed">Completed</Option>
         </Select>
-
+<Select
+  value={hostelFilter}
+  style={{ width: 150, marginLeft: 10 }}
+  onChange={handleHostelChange}
+  placeholder="Hostel"
+>
+  <Option value="All">All Hostels</Option>
+  {getUniqueHostels().map(hostel => (
+    <Option key={hostel} value={hostel}>{hostel}</Option>
+  ))}
+</Select>
         {/* Permission Filter */}
         {hasPermissionData && (
           <Select
@@ -2530,7 +3611,7 @@ return (
             setDateRange([]);
             setStatusFilter("All");
             setPermissionFilter("All");
-            setHostelFilter("All");  
+             setHostelFilter("All");
             applyFilters(data, "", [], "All", "All");
           }}
           style={{ marginLeft: 10, color: "red" }}
@@ -2548,7 +3629,7 @@ return (
           Refresh
         </Button>
       </div>
-
+<AcceptButtonLegend />
       {/* Table */}
       <Table
         columns={columns}
@@ -2596,6 +3677,7 @@ return (
         onCancel={handleRejectionCancel}
         confirmLoading={rejectionLoading}
         width={600}
+        zIndex={1100}
         okText="Confirm Rejection"
         cancelText="Cancel"
         okButtonProps={{
@@ -2693,6 +3775,7 @@ return (
         onCancel={() => setEditModalOpen(false)}
         onOk={handleApproveWithEdits}
         width={600}
+        zIndex={1100}
       >
         <Form form={editForm} layout="vertical">
           <Form.Item
@@ -2789,9 +3872,91 @@ return (
         onCancel={() => {
           setSelectedItem(null);
           setDetailedItem(null);
+          setUsageStats(null);
+          setTableImages({});
+  setImageLoadingIds(new Set());
         }}
-        footer={null}
-        width={800}
+        zIndex={1000}
+ footer={
+  selectedItem?.status === "Pending" ? [
+    <Button
+      key="accept"
+      type="primary"
+      icon={(() => {
+        const accessInfo = getPassAccessInfo(selectedItem, data);
+        return accessInfo.isAdmin ? <CrownOutlined /> :
+               accessInfo.isRestricted ? <LockOutlined /> :
+               accessInfo.hasMultiplePending ? <TimeIcon /> : 
+               <CheckCircleOutlined />;
+      })()}
+      disabled={!(() => {
+        const accessInfo = getPassAccessInfo(selectedItem, data);
+        return accessInfo.canAccept;
+      })()}
+      onClick={() => {
+        setEditRecord(selectedItem);
+        // ... existing onClick logic
+        setEditModalOpen(true);
+      }}
+      style={{ 
+        backgroundColor: (() => {
+          const accessInfo = getPassAccessInfo(selectedItem, data);
+          return accessInfo.isAdmin ? "#722ed1" :
+                 accessInfo.isRestricted ? "#ff7875" :
+                 accessInfo.hasMultiplePending ? "#faad14" :
+                 "#0b7bfcff";
+        })(),
+        borderColor: "#ffffffff",
+        height: "36px",
+        fontWeight: "600"
+      }}
+    >
+      {(() => {
+        const accessInfo = getPassAccessInfo(selectedItem, data);
+        return accessInfo.isAdmin ? "Admin Review" :
+               accessInfo.isRestricted ? "Restricted" :
+               accessInfo.hasMultiplePending ? "Time-Restricted" :
+               "Review & Accept";
+      })()}
+    </Button>,
+    
+    // Quick Accept with same logic
+    <Button
+      key="direct-accept"
+      type="primary"
+      icon={(() => {
+        const accessInfo = getPassAccessInfo(selectedItem, data);
+        return accessInfo.isAdmin ? <CrownOutlined /> :
+               accessInfo.isRestricted ? <LockOutlined /> :
+               <CheckCircleOutlined />;
+      })()}
+      // ... rest of quick accept button logic with same styling
+    >
+      {(() => {
+        const accessInfo = getPassAccessInfo(selectedItem, data);
+        return accessInfo.isAdmin ? "Admin Quick Accept" :
+               accessInfo.isRestricted ? "Restricted" :
+               "Quick Accept";
+      })()}
+    </Button>,
+    
+
+  ] : [
+    // For non-pending requests, show only close button (unchanged)
+    <Button
+      key="close"
+      type="primary"
+      onClick={() => {
+        setSelectedItem(null); setDetailedItem(null); setUsageStats(null);
+        setTableImages({}); setImageLoadingIds(new Set());
+      }}
+      style={{ height: "36px" }}
+    >
+      Close
+    </Button>
+  ]
+}
+        width={900}
       >
         {selectedItem && (
           <div style={{ padding: "0 10px" }}>
@@ -2845,124 +4010,403 @@ return (
               </div>
 
               {/* 🚀 OPTIMIZED: Image section with loading states */}
+             <div
+  style={{
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 15,
+    minHeight: 90,
+  }}
+>
+  {detailLoading ? (
+    <div style={{ textAlign: "center", padding: "20px" }}>
+      <Spin 
+        indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />}
+      />
+      <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+        Loading images...
+      </div>
+    </div>
+  ) : (
+    <>
+      {/* Student Photo with Download */}
+      {detailedItem && getStudentImageSrc(detailedItem) && (
+        <div style={{ textAlign: "center", position: "relative" }}>
+          <div
+            style={{
+              fontSize: 11,
+              marginBottom: 4,
+              color: "#64748b",
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            Student Image
+            <Button
+              type="text"
+              size="small"
+              icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <polyline points="7,10 12,15 17,10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>}
+              onClick={() => downloadStudentImage(selectedItem, getStudentImageSrc(detailedItem))}
+              style={{ 
+                padding: "2px 4px", 
+                height: "16px",
+                color: "#3b82f6",
+                border: "1px solid #e0e7ff",
+                borderRadius: "4px",
+                fontSize: "10px"
+              }}
+              title="Download student photo"
+            />
+          </div>
+          <div style={{ position: "relative" }}>
+            <Image
+              src={getStudentImageSrc(detailedItem)}
+              alt={`${selectedItem.name}'s photo`}
+              width={82}
+              height={82}
+              style={{
+                objectFit: "cover",
+                border: "2px solid #e0e7ff",
+                boxShadow: "0 4px 10px rgba(15, 23, 42, 0.15)",
+                borderRadius: "6px",
+              }}
+              preview={{
+                mask: (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 6px",
+                      borderRadius: 999,
+                      background: "rgba(15, 23, 42, 0.45)",
+                      color: "#fff",
+                    }}
+                  >
+                    Click to zoom
+                  </span>
+                ),
+              }}
+            />
+            
+            {/* Floating download button on image hover */}
+            <div
+              style={{
+                position: "absolute",
+                top: "4px",
+                right: "4px",
+                opacity: 0,
+                transition: "opacity 0.2s ease",
+                background: "rgba(59, 130, 246, 0.9)",
+                borderRadius: "4px",
+                padding: "2px",
+              }}
+              className="image-download-overlay"
+            >
+              <Button
+                type="text"
+                size="small"
+                icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="7,10 12,15 17,10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="12" y1="15" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  downloadStudentImage(selectedItem, getStudentImageSrc(detailedItem));
+                }}
+                style={{ 
+                  padding: 0,
+                  width: "20px",
+                  height: "20px",
+                  border: "none",
+                  color: "white"
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Letter with Download (only for leave requests) */}
+      {detailedItem &&
+        selectedItem.permission === "leave" &&
+        getLeaveLetterSrc(detailedItem) && (
+          <div style={{ textAlign: "center", position: "relative" }}>
+            <div
+              style={{
+                fontSize: 11,
+                marginBottom: 4,
+                color: "#64748b",
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              Leave Letter
+              <Button
+                type="text"
+                size="small"
+                icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="7,10 12,15 17,10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>}
+                onClick={() => downloadLeaveLetter(selectedItem, getLeaveLetterSrc(detailedItem))}
+                style={{ 
+                  padding: "2px 4px", 
+                  height: "16px",
+                  color: "#ef4444",
+                  border: "1px solid #fee2e2",
+                  borderRadius: "4px",
+                  fontSize: "10px"
+                }}
+                title="Download leave letter"
+              />
+            </div>
+            <div style={{ position: "relative" }}>
+              <Image
+                src={getLeaveLetterSrc(detailedItem)}
+                alt="Leave letter"
+                width={82}
+                height={82}
+                style={{
+                  objectFit: "cover",
+                  border: "2px solid #fee2e2",
+                  boxShadow: "0 4px 10px rgba(127, 29, 29, 0.2)",
+                  borderRadius: "6px",
+                }}
+                preview={{
+                  mask: (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 6px",
+                        borderRadius: 999,
+                        background: "rgba(127, 29, 29, 0.6)",
+                        color: "#fff",
+                      }}
+                    >
+                      View letter
+                    </span>
+                  ),
+                }}
+              />
+              
+              {/* Floating download button for leave letter */}
               <div
                 style={{
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                  minHeight: 90,
+                  position: "absolute",
+                  top: "4px",
+                  right: "4px",
+                  opacity: 0,
+                  transition: "opacity 0.2s ease",
+                  background: "rgba(239, 68, 68, 0.9)",
+                  borderRadius: "4px",
+                  padding: "2px",
                 }}
+                className="image-download-overlay"
               >
-                {detailLoading ? (
-                  <div style={{ textAlign: "center", padding: "20px" }}>
-                    <Spin 
-                      indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />}
-                    />
-                    <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
-                      Loading images...
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Student Photo */}
-                    {detailedItem && getStudentImageSrc(detailedItem) && (
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            marginBottom: 4,
-                            color: "#64748b",
-                            fontWeight: 500,
-                          }}
-                        >
-                          Student Image
-                        </div>
-                        <Image
-                          src={getStudentImageSrc(detailedItem)}
-                          alt={`${selectedItem.name}'s photo`}
-                          width={82}
-                          height={82}
-                          style={{
-                            objectFit: "cover",
-                            border: "2px solid #e0e7ff",
-                            boxShadow: "0 4px 10px rgba(15, 23, 42, 0.15)",
-                          }}
-                          preview={{
-                            mask: (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  padding: "2px 6px",
-                                  borderRadius: 999,
-                                  background: "rgba(15, 23, 42, 0.45)",
-                                  color: "#fff",
-                                }}
-                              >
-                                Click to zoom
-                              </span>
-                            ),
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Leave Letter (only for leave requests) */}
-                    {detailedItem &&
-                      selectedItem.permission === "leave" &&
-                      getLeaveLetterSrc(detailedItem) && (
-                        <div style={{ textAlign: "center" }}>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              marginBottom: 4,
-                              color: "#64748b",
-                              fontWeight: 500,
-                            }}
-                          >
-                            Leave Letter
-                          </div>
-                          <Image
-                            src={getLeaveLetterSrc(detailedItem)}
-                            alt="Leave letter"
-                            width={82}
-                            height={82}
-                            style={{
-                              objectFit: "cover",
-                              border: "2px solid #e0e7ff",
-                              boxShadow: "0 4px 10px rgba(127, 29, 29, 0.2)",
-                            }}
-                            preview={{
-                              mask: (
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    padding: "2px 6px",
-                                    borderRadius: 999,
-                                    background: "rgba(127, 29, 29, 0.6)",
-                                    color: "#fff",
-                                  }}
-                                >
-                                  View letter
-                                </span>
-                              ),
-                            }}
-                          />
-                        </div>
-                      )}
-
-                    {/* Show placeholders if no images are found and loading is complete */}
-                    {!detailLoading && (!detailedItem || (!getStudentImageSrc(detailedItem) && 
-                      !(selectedItem.permission === "leave" && getLeaveLetterSrc(detailedItem)))) && (
-                      <div style={{ textAlign: "center", color: "#999", fontSize: 12 }}>
-                        No images available
-                      </div>
-                    )}
-                  </>
-                )}
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <polyline points="7,10 12,15 17,10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <line x1="12" y1="15" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadLeaveLetter(selectedItem, getLeaveLetterSrc(detailedItem));
+                  }}
+                  style={{ 
+                    padding: 0,
+                    width: "20px",
+                    height: "20px",
+                    border: "none",
+                    color: "white"
+                  }}
+                />
               </div>
             </div>
+          </div>
+        )}
 
+{detailedItem &&
+  selectedItem.permission !== "leave" &&
+  getPermissionLetterSrc(detailedItem) && (
+    <div style={{ textAlign: "center", position: "relative" }}>
+      <div
+        style={{
+          fontSize: 11,
+          marginBottom: 4,
+          color: "#64748b",
+          fontWeight: 500,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+        }}
+      >
+        Permission Letter
+        <Button
+          type="text"
+          size="small"
+          icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points="7,10 12,15 17,10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>}
+          onClick={() => downloadPermissionLetter(selectedItem, getPermissionLetterSrc(detailedItem))}
+          style={{ 
+            padding: "2px 4px", 
+            height: "16px",
+            color: "#f59e0b",
+            border: "1px solid #fef3c7",
+            borderRadius: "4px",
+            fontSize: "10px"
+          }}
+          title="Download permission letter"
+        />
+      </div>
+      <div style={{ position: "relative" }}>
+        <Image
+          src={getPermissionLetterSrc(detailedItem)}
+          alt="Permission letter"
+          width={82}
+          height={82}
+          style={{
+            objectFit: "cover",
+            border: "2px solid #fef3c7",
+            boxShadow: "0 4px 10px rgba(146, 64, 14, 0.2)",
+            borderRadius: "6px",
+          }}
+          preview={{
+            mask: (
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: "2px 6px",
+                  borderRadius: 999,
+                  background: "rgba(146, 64, 14, 0.6)",
+                  color: "#fff",
+                }}
+              >
+                View letter
+              </span>
+            ),
+          }}
+        />
+        
+        {/* Floating download button for permission letter */}
+        <div
+          style={{
+            position: "absolute",
+            top: "4px",
+            right: "4px",
+            opacity: 0,
+            transition: "opacity 0.2s ease",
+            background: "rgba(245, 158, 11, 0.9)",
+            borderRadius: "4px",
+            padding: "2px",
+          }}
+          className="image-download-overlay"
+        >
+          <Button
+            type="text"
+            size="small"
+            icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <polyline points="7,10 12,15 17,10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <line x1="12" y1="15" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>}
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadPermissionLetter(selectedItem, getPermissionLetterSrc(detailedItem));
+            }}
+            style={{ 
+              padding: 0,
+              width: "20px",
+              height: "20px",
+              border: "none",
+              color: "white"
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  )}
+      {/* Show placeholders if no images are found and loading is complete */}
+      {!detailLoading && (!detailedItem || (!getStudentImageSrc(detailedItem) && 
+  !(selectedItem.permission === "leave" && getLeaveLetterSrc(detailedItem)) &&
+  !(selectedItem.permission !== "leave" && getPermissionLetterSrc(detailedItem)))) && (
+  <div style={{ textAlign: "center", color: "#999", fontSize: 12 }}>
+    No images available
+  </div>
+)}
+    </>
+  )}
+</div>
+            </div>
+            {selectedItem?.status === "Late Entry" && (
+  <div style={{ 
+    marginBottom: "20px",
+    padding: "16px",
+    backgroundColor: "#fff7e6",
+    border: "2px solid #ffd591",
+    borderRadius: "8px",
+    textAlign: "center"
+  }}>
+    <div style={{ marginBottom: "12px" }}>
+      <ClockCircleOutlined style={{ fontSize: "24px", color: "#fa8c16", marginBottom: "8px" }} />
+      <h3 style={{ color: "#d46b08", margin: "0 0 8px" }}>
+        Late Entry Detected
+      </h3>
+      <p style={{ color: "#8c5a00", margin: 0, fontSize: "14px" }}>
+        This student returned after the expected time. Review required to mark as completed.
+      </p>
+    </div>
+    
+    <Button
+      type="primary"
+      size="large"
+      icon={<EditOutlined />}
+      onClick={() => handleLateEntryReviewClick(selectedItem)}
+      style={{
+        backgroundColor: "#fa8c16",
+        borderColor: "#fa8c16",
+        fontWeight: "600",
+        height: "40px",
+        paddingLeft: "24px",
+        paddingRight: "24px"
+      }}
+    >
+      Review Late Entry & Complete
+    </Button>
+    
+    <div style={{ 
+      marginTop: "12px", 
+      fontSize: "12px", 
+      color: "#8c5a00",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: "8px"
+    }}>
+      <ExclamationCircleOutlined />
+      Requires warden justification before completion
+    </div>
+  </div>
+)}
+<UsageStatisticsSection />
             {/* Main Details - use selectedItem for basic info, detailedItem for extended data */}
             <Descriptions
               bordered
@@ -3139,17 +4583,16 @@ return (
         </span>
       </Descriptions.Item>
     )}
-    <Descriptions.Item label={`${selectedItem.status === "Rejected" ? "Rejected" : "Last Updated"} On`}>
-      <span style={{ color: "#1e293b", fontWeight: 600 }}>
-        {selectedItem.updated_at ? new Date(selectedItem.updated_at).toLocaleString("en-IN", {
-          day: "2-digit",
+    <Descriptions.Item label={`${selectedItem.status === "Rejected" ? "Rejected" : "Processed"} On`}>
+      <span style={{ color: "#666", fontWeight: 500 }}>
+        {new Date(selectedItem.updated_at).toLocaleString("en-US", {
           month: "short",
+          day: "numeric",
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
-          timeZone: "Asia/Kolkata",
-        }) : "N/A"}
+        })}
       </span>
     </Descriptions.Item>
   </Descriptions>
@@ -3193,24 +4636,170 @@ return (
                 textAlign: "center",
               }}
             >
-              
-            Requested on:&nbsp;
-              <span style={{ fontWeight: "700", color: "#334155" }}>
-                {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleString("en-IN", {
-                  day: "2-digit",
+              Requested:&nbsp;
+              <span style={{ fontWeight: "600" }}>
+                {new Date(selectedItem.created_at).toLocaleString("en-US", {
                   month: "short",
+                  day: "numeric",
                   year: "numeric",
                   hour: "2-digit",
                   minute: "2-digit",
                   second: "2-digit",
                   hour12: true,
-                  timeZone: "Asia/Kolkata",
-                }) : "N/A"}
+                })}
               </span>
             </p>
           </div>
         )}
       </Modal>
+      <Modal
+  title={
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <ClockCircleOutlined style={{ color: "#fa8c16" }} />
+      <span>
+        Review Late Entry - {lateEntryTarget?.permission === "leave" ? "Leave" : "Outpass"}
+      </span>
+    </div>
+  }
+  open={lateEntryModalVisible}
+  onOk={handleLateEntryReview}
+  onCancel={handleLateEntryCancel}
+  confirmLoading={lateEntryLoading}
+  width={700}
+  zIndex={1100}
+  okText="Mark as Completed"
+  cancelText="Cancel"
+  okButtonProps={{
+    icon: <CheckCircleOutlined />,
+    style: { backgroundColor: "#52c41a", borderColor: "#52c41a" }
+  }}
+  maskClosable={false}
+>
+  {lateEntryTarget && (
+    <div>
+      <div
+        style={{
+          backgroundColor: "#fff7e6",
+          border: "1px solid #ffd591",
+          borderRadius: "6px",
+          padding: "16px",
+          marginBottom: "20px",
+        }}
+      >
+        <Text strong style={{ color: "#d46b08", fontSize: "16px" }}>
+          ⏰ Late Entry Review Required
+        </Text>
+        <div style={{ marginTop: "8px" }}>
+          <Text strong style={{ color: "#1890ff" }}>
+            {lateEntryTarget.name}
+          </Text>
+          <Text style={{ marginLeft: "8px", color: "#666" }}>
+            ({lateEntryTarget.permission === "leave" ? "Roll No" : "Hostel ID"}: {lateEntryTarget.display_id || lateEntryTarget.hostel_id})
+          </Text>
+        </div>
+        <div style={{ marginTop: "8px", fontSize: "14px", color: "#666" }}>
+          This student returned late from their {lateEntryTarget.permission === "leave" ? "leave" : "outpass"}.
+          Please provide justification and remarks before marking as completed.
+        </div>
+        
+        {/* Late Entry Details */}
+        <div style={{ 
+          marginTop: "12px", 
+          padding: "12px", 
+          backgroundColor: "#fef2f2", 
+          border: "1px solid #fecaca",
+          borderRadius: "4px" 
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px" }}>
+            <div>
+              <strong>Expected Return:</strong><br/>
+              <span style={{ color: "#059669" }}>
+                {new Date(lateEntryTarget.date_to).toLocaleDateString("en-US", {
+                  month: "short", day: "numeric", year: "numeric"
+                })} - {formatTime(lateEntryTarget.time_in)}
+              </span>
+            </div>
+            <div>
+              <strong>Actual Return:</strong><br/>
+              <span style={{ color: "#dc2626" }}>
+                {lateEntryTarget.entry_time ? 
+                  new Date(lateEntryTarget.entry_time).toLocaleString("en-US", {
+                    month: "short", day: "numeric", year: "numeric",
+                    hour: "2-digit", minute: "2-digit", hour12: true
+                  }) : "Not recorded"
+                }
+              </span>
+            </div>
+          </div>
+          <div style={{ marginTop: "8px", fontSize: "13px" }}>
+            <strong>Purpose:</strong> {lateEntryTarget.purpose}
+          </div>
+        </div>
+      </div>
+
+      <Form form={lateEntryForm} layout="vertical">
+        <Form.Item
+          label={
+            <span>
+              <ExclamationCircleOutlined style={{ color: "#fa8c16", marginRight: "4px" }} />
+              Justification for Late Return
+            </span>
+          }
+          name="justification"
+          rules={[
+            {
+              required: true,
+              message: "Please provide justification for the late return",
+            },
+            {
+              min: 15,
+              message: "Justification should be at least 15 characters long",
+            },
+            { max: 300, message: "Justification cannot exceed 300 characters" },
+          ]}
+        >
+          <TextArea
+            rows={4}
+            placeholder="Explain why the late return is justified (e.g., emergency, transport delay, medical reasons, etc.). This will be recorded for audit purposes."
+            showCount
+            maxLength={300}
+          />
+        </Form.Item>
+
+        <Form.Item
+          label="Additional Warden Remarks (Optional)"
+          name="remarks"
+          rules={[
+            { max: 200, message: "Remarks cannot exceed 200 characters" },
+          ]}
+        >
+          <TextArea
+            rows={3}
+            placeholder="Any additional comments or instructions for future reference..."
+            showCount
+            maxLength={200}
+          />
+        </Form.Item>
+      </Form>
+
+      <div
+        style={{
+          fontSize: "13px",
+          color: "#666",
+          marginTop: "16px",
+          padding: "12px",
+          backgroundColor: "#f0f5ff",
+          borderRadius: "4px",
+          borderLeft: "3px solid #1890ff",
+        }}
+      >
+        <Text strong>Note:</Text> After review, the status will be updated to "Completed" 
+        and the justification will be recorded in the system for audit trail. 
+        The student's late entry will be documented but the request will be marked as fulfilled.
+      </div>
+    </div>
+  )}
+</Modal>
       {EnhancedActivePassModal()}
     </div>
   );
